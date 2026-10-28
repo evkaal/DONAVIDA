@@ -1,0 +1,11 @@
+DROP TABLE IF EXISTS acciones_auditoria;
+DROP TABLE IF EXISTS tipos_alerta;
+DROP TABLE IF EXISTS estados_asignacion;
+DROP TABLE IF EXISTS estados_solicitud;
+DROP TABLE IF EXISTS niveles_prioridad;
+DROP TABLE IF EXISTS estados_hemocomponente;
+DROP TABLE IF EXISTS tipos_hemocomponente;
+DROP TABLE IF EXISTS tipos_sangre;
+DROP TABLE IF EXISTS colonias;
+DROP TABLE IF EXISTS tipos_institucion;
+DROP TABLE IF EXISTS roles;
