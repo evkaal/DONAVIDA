@@ -1,23 +1,21 @@
 package main
 
 import (
-	"donavida-backend/internal/database"
 	"fmt"
 	"net/http"
 
-	
+	"donavida-backend/internal/database"
+	"donavida-backend/internal/handlers"
 )
 
-func main (){
+func main() {
+	// Inicializar la base de datos
 	database.InitDB()
 
+	// Definir las rutas de autenticación
+	http.HandleFunc("/api/register", handlers.Registrar)
+	http.HandleFunc("/api/login", handlers.Login)
 
-	fmt.Println("Servidor corriendo en el puerto 8080")
-
-	//ruta de prueba
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request){
-    w.Write([]byte("Bienvenido al back"))
-	})
-
+	fmt.Println("Servidor corriendo en el puerto 8080 con rutas de autenticación...")
 	http.ListenAndServe(":8080", nil)
 }
