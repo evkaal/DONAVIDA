@@ -11,12 +11,25 @@ import(
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 
+	"os"
+	"log"
+
 
 )
 
 
 //clave para los tokens JWT(con variables de entorno)
-var jwtKey= []byte("NA_IN_GE_65dfnov")
+var jwtKey= []byte(getJWTSecret())
+
+
+func getJWTSecret() string{
+	secret := os.Getenv("JWT_SECRET")
+	if secret ==  ""{
+		//si no se encuentra la variable, el servidor se detiene
+		log.Fatal("Fatal: la variable de entorno JWT_Secret no esta definida")
+	}
+	return secret
+}
 
 
 type claims struct {
