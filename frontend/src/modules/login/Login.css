@@ -167,9 +167,7 @@
   animation: fadeIn 0.25s ease-in-out;
 }
 
-/* ==========================================================================
-   CONFIGURACIÓN DE TAMAÑOS DE ÍCONOS DE ERROR
-   ========================================================================== */
+/* iconos de error */
 .alert-error-icon {
   color: #dc2626;
   flex-shrink: 0;
@@ -179,7 +177,7 @@
   justify-content: center;
 }
 
-/* ⚙️ CAMBIAR TAMAÑO DEL ÍCONO DE ALERTA DE ERROR AQUÍ */
+/* tamaño del icono de alerta */
 .alert-error-icon svg,
 .alert-error-icon img {
   width: 20px !important;
@@ -191,7 +189,6 @@
 
 .alert-error-icon i {
   font-size: 20px;
-  /* 👈 Si usas Bootstrap Icons / FontAwesome */
 }
 
 .alert-error-title {
@@ -223,6 +220,52 @@
   font-weight: 600;
 }
 
+/* selector de rol: tres botones tipo toggle */
+.login-role-selector {
+  margin-bottom: 1.5rem;
+}
+
+.login-role-label {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 0.55rem;
+}
+
+.login-role-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.login-role-btn {
+  padding: 0.45rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 6px;
+  background-color: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.18s ease-in-out;
+  white-space: nowrap;
+}
+
+.login-role-btn:hover {
+  border-color: #9e1329;
+  color: #9e1329;
+  background-color: #fff5f5;
+}
+
+/* Estado activo: borde y texto rojo */
+.login-role-btn.active {
+  border-color: #9e1329;
+  color: #9e1329;
+  background-color: #fff5f5;
+  font-weight: 600;
+}
+
 /* Campos de entrada */
 .form-group-custom {
   margin-bottom: 1.35rem;
@@ -242,7 +285,7 @@
   align-items: center;
 }
 
-/*CONFIGURACIÓN DE TAMAÑOS DE ÍCONOS (CORREO Y CONTRASEÑA) */
+/* tamaño iconos (correo y contrseña) */
 .input-left-icon {
   position: absolute;
   left: 14px;
@@ -291,7 +334,7 @@
   padding-right: 2.8rem;
 }
 
-/*CONFIGURACIÓN DEL ÍCONO DE VER/OCULTAR CONTRASEÑA */
+/*icono de ver/ocultar contraseña */
 .password-toggle-btn {
   position: absolute;
   right: 12px;
@@ -322,7 +365,7 @@
   color: #475569;
 }
 
-/* Checkbox y enlace de contraseña */
+/* Checkbox */
 .options-row {
   display: flex;
   align-items: center;
@@ -347,18 +390,6 @@
   accent-color: #9e1329;
   cursor: pointer;
   border-radius: 4px;
-}
-
-.forgot-password-link {
-  color: #9e1329;
-  text-decoration: none;
-  font-weight: 600;
-  transition: color 0.15s ease;
-}
-
-.forgot-password-link:hover {
-  color: #7a0c1e;
-  text-decoration: underline;
 }
 
 /* Botón principal */
@@ -433,27 +464,24 @@
   justify-content: center;
 }
 
-/* ⚙️ CAMBIAR TAMAÑO DEL SPINNER / ÍCONO DE CARGA AQUÍ */
+/* CAMBIAR TAMAÑO DEL SPINNER / ÍCONO DE CARGA AQUÍ */
 .spinner-icon,
 .spinner-wrapper svg,
 .spinner-wrapper img {
   width: 18px;
-  /* 👈 Modifica aquí el ancho */
+  /* ancho */
   height: 18px;
-  /* 👈 Modifica aquí el alto */
+  /* alto */
   animation: spin 0.8s linear infinite;
   object-fit: contain;
 }
 
 .spinner-wrapper i {
   font-size: 18px;
-  /* 👈 Si usas fuentes de iconos */
   animation: spin 0.8s linear infinite;
 }
 
-/* --------------------------------------------------------------------------
-   RESPONSIVIDAD (Dispositivos Móviles y Tablets)
-   -------------------------------------------------------------------------- */
+/* responsividad*/
 @media (max-width: 991.98px) {
   .login-page {
     flex-direction: column;
