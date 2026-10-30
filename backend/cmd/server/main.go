@@ -5,23 +5,42 @@ import (
 	"donavida-backend/internal/handlers"
 	"fmt"
 	"net/http"
-
-	
 )
 
-func main (){
-	database.InitDB()
+// Middleware para habilitar CORS y permitir peticiones desde React (Vite)
+func enableCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
-    
-	fmt.Println("Servidor corriendo en el puerto 8080")
-    // Rutas de autenticación
-    http.HandleFunc("/api/register", handlers.Register) // Asegúrate de que la función en auth.go se llame Register
-    http.HandleFunc("/api/login", handlers.Login)       // Y Login
-	//ruta de prueba
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request){
-    w.Write([]byte("Bienvenido al back"))
+		// Si es una petición preflight del navegador (OPTIONS), responde inmediatamente
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	})
-
-	http.ListenAndServe(":8080", nil)
 }
 
+func main() {
+	database.InitDB()
+
+	// Creamos un nuevo multiplexor de rutas
+	mux := http.NewServeMux()
+
+	// Rutas de autenticación
+	mux.HandleFunc("/api/register", handlers.Register)
+	mux.HandleFunc("/api/login", handlers.Login)
+
+	// Ruta de prueba
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Bienvenido al back"))
+	})
+
+	fmt.Println("Servidor corriendo en el puerto 8080")
+
+	// Pasamos el enrutador (mux) a través de nuestro middleware de CORS y lo levantamos
+	http.ListenAndServe(":8080", enableCORS(mux))
+}

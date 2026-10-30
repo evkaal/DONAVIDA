@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os"
 	"log"
-
+    "fmt"
 	"donavida-backend/internal/database"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -33,7 +33,7 @@ type claims struct {
 type usuarioInput struct {
 	Nombre        string `json:"nombre"`
 	Email         string `json:"email"`
-	Password      string `json:"password_hash"` // <--- Corregido a string para recibir la contraseña en texto
+	Password      string `json:"password"` // <--- Corregido a string para recibir la contraseña en texto
 	RolID         int    `json:"rol_id"`
 	InstitucionId *int   `json:"institucion_id"`
 }
@@ -73,6 +73,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 
 // Función Login para atender la ruta /api/login
 func Login(w http.ResponseWriter, r *http.Request) {
+	
 	if r.Method != http.MethodPost {
 		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
 		return
@@ -85,7 +86,36 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Aquí puedes implementar la lógica para buscar al usuario por email y validar su password con bcrypt.
+	// 1. Buscar el usuario en la base de datos por su email
+	var storedHash string
+	var nombreUsuario string
+	var rolID int
+	
+	query := `SELECT nombre, password_hash, rol_id FROM usuarios WHERE email = $1`
+	err = database.DB.QueryRow(query, input.Email).Scan(&nombreUsuario, &storedHash, &rolID)
+	
+	if err != nil {
+		// Si no existe el correo o hay un error, denegamos el acceso (401 Unauthorized)
+		http.Error(w, "Correo o contraseña incorrectos", http.StatusUnauthorized)
+		return
+	}
+	fmt.Printf("Intentando login para: %s con contraseña ingresada: %s\n", input.Email, input.Password)
+
+	// 2. Comparar la contraseña ingresada en texto plano con el hash de la BD usando bcrypt
+	err = bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(input.Password))
+	if err != nil {
+		// Si la contraseña no coincide, denegamos el acceso
+		http.Error(w, "Correo o contraseña incorrectos", http.StatusUnauthorized)
+		return
+	}
+
+	// 3. Si todo es correcto, respondemos con éxito y los datos del usuario
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"mensaje": "Login pendiente de implementar"})
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"mensaje": "Login exitoso",
+		"nombre":  nombreUsuario,
+		"email":   input.Email,
+		"rol_id":  rolID,
+	})
 }

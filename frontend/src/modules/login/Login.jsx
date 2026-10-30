@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './Login.css';
+import { loginUser } from '../../services/authService';
 
 export default function Login({ onLoginSuccess }) {
   // 1. Estados del formulario (valores de los inputs)
@@ -13,39 +14,44 @@ export default function Login({ onLoginSuccess }) {
   const [errorLogin, setErrorLogin] = useState(false);
   const [loginExitoso, setLoginExitoso] = useState(false);
 
-  // CREDENCIALES VÁLIDAS DE DEMOSTRACIÓN:
-  // - Correo: usuario@institucion.gob.mx   Contraseña: password123
-  // - O también: admin@donavida.gob.mx     Contraseña: admin123
 
-  const handleSubmit = (e) => {
+  // Función manejadora del envío del formulario conectada al Backend en Go
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorLogin(false);
     setLoginExitoso(false);
     setCargando(true);
 
-    setTimeout(() => {
+    try {
+      // Llamada real al backend en Go usando la capa de servicios de Axios
+      const data = await loginUser({ 
+        email: correo.trim(), 
+        password: password 
+      });
+
+      // Si el backend responde con éxito (200 OK)
       setCargando(false);
+      setLoginExitoso(true);
 
-      // Verificación de credenciales
-      const esValido =
-        (correo.trim().toLowerCase() === 'usuario@institucion.gob.mx' && password === 'password123') ||
-        (correo.trim().toLowerCase() === 'admin@donavida.gob.mx' && password === 'admin123');
-
-      if (esValido) {
-        setLoginExitoso(true);
-        setErrorLogin(false);
-
-        // Si existe callback de éxito, navega al dashboard tras breve confirmación
-        setTimeout(() => {
-          if (onLoginSuccess) {
-            onLoginSuccess(correo.trim());
-          }
-        }, 700);
-      } else {
-        // Credenciales erróneas: se activa la alerta de error de Figma
-        setErrorLogin(true);
+      // Opcional: guardar el token JWT devuelto por Go en localStorage
+      if (data && data.token) {
+        localStorage.setItem('token', data.token);
       }
-    }, 800);
+
+      // Redirigir al dashboard únicamente si el login fue exitoso
+      setTimeout(() => {
+        if (onLoginSuccess) {
+          onLoginSuccess(correo.trim());
+        }
+      }, 700);
+
+    } catch (err) {
+      // Si el backend rechaza las credenciales (401 Unauthorized u otro error)
+      setCargando(false);
+      setErrorLogin(true);
+      setLoginExitoso(false);
+      console.error("Error en el login:", err);
+    }
   };
 
   return (
@@ -54,9 +60,7 @@ export default function Login({ onLoginSuccess }) {
       <div className="login-left-panel col-12 col-lg-6">
         <div className="brand-header">
           <div className="brand-logo-placeholder">
-            {
-              <img src="/src/assets/donavida_logo.png" alt="Logo" className="brand-logo-img" />
-            }
+            <img src="/src/assets/donavida_logo.png" alt="Logo" className="brand-logo-img" />
           </div>
         </div>
 
@@ -192,9 +196,7 @@ export default function Login({ onLoginSuccess }) {
             <button type="submit" className="btn-login-submit" disabled={cargando}>
               {cargando ? (
                 <>
-                  {/* APARTADO PARA ÍCONO DE CARGA / SPINNER */}
                   <span className="spinner-wrapper">
-                    {/*ícono o spinner de carga */}
                     <svg className="spinner-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                     </svg>
