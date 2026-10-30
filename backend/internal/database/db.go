@@ -16,7 +16,7 @@ var DB *sql.DB
 func InitDB(){
 	//cadena de conexion a la base de datos
 	// (usuario postgres, contraseña, puerto)
-	conStr := "host=localhost port=5432 user=postgres password=donages dbname=donavida sslmode=disable"
+	conStr := "host=localhost port=5432 user=postgres password=felix123 dbname=donavida sslmode=disable"
     
 
 	
