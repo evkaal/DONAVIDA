@@ -31,8 +31,8 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Rutas de autenticación
-	mux.HandleFunc("/api/register", handlers.Register)
-	mux.HandleFunc("/api/login", handlers.Login)
+	http.HandleFunc("/api/register", handlers.HabilitarCORS(handlers.Register))
+	http.HandleFunc("/api/login", handlers.HabilitarCORS(handlers.Login))
 
 	// Ruta de prueba
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
