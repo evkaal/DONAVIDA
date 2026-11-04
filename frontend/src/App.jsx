@@ -3,6 +3,7 @@ import Login from './modules/login';
 import Dashboard from './modules/dashboard';
 import GestionUsuarios from './modules/usuarios';
 
+
 function App() {
   // Estado para el usuario autenticado
   const [usuario, setUsuario] = useState(null);
@@ -15,12 +16,12 @@ function App() {
     setModuloApp('dashboard');
   };
 
-  // Sin sesión pantalla de Login
+  // Sin sesión: pantalla de Login
   if (!usuario) {
     return <Login onLoginSuccess={(datosUsuario) => setUsuario(datosUsuario)} />;
   }
 
-  // Módulo: Gestión de Usuarios
+  // Módulo: Gestión de Usuarios (Admin)
   if (moduloApp === 'usuarios') {
     return (
       <GestionUsuarios
@@ -30,6 +31,7 @@ function App() {
       />
     );
   }
+
 
   // Módulo por defecto: Dashboard
   return (

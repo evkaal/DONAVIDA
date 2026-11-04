@@ -1,10 +1,6 @@
 import React, { useState } from 'react';
 import './Login.css';
 
-//Endpoint de autenticación sugerido (back):
-//    POST /api/auth/login
-//    Body: { correo, password, rolSeleccionado }
-//    Response: { token, usuario: { nombre, rol, institucion } }
 const ROLES_INGRESO = [
   { id: 'medico', label: 'Personal médico' },
   { id: 'admin_ins', label: 'Admin. institución' },
@@ -18,8 +14,6 @@ export default function Login({ onLoginSuccess }) {
   const [recordarme, setRecordarme] = useState(false);
 
   // Estado del rol seleccionado
-  // (back) Este valor debe enviarse al endpoint de autenticación para
-  //    que el backend valide que el usuario tiene permisos para ese rol.
   const [rolSeleccionado, setRolSeleccionado] = useState('medico');
 
   // Estados de interfaz
@@ -28,9 +22,10 @@ export default function Login({ onLoginSuccess }) {
   const [errorLogin, setErrorLogin] = useState(false);
   const [loginExitoso, setLoginExitoso] = useState(false);
 
-  // usuarios de prueba:
-  // - Personal médico:     usuario@institucion.gob.mx  /  password123
-  // - Admin. general:      admin@donavida.gob.mx        /  admin123
+  // Usuarios de prueba:
+  // - Personal médico:         usuario@institucion.gob.mx  /  password123
+  // - Admin. institución:      admins@institucion.gob.mx   /  adminins123
+  // - Admin. general:          admin@donavida.gob.mx        /  admin123
   const handleSubmit = (e) => {
     e.preventDefault();
     setErrorLogin(false);
@@ -40,23 +35,39 @@ export default function Login({ onLoginSuccess }) {
     setTimeout(() => {
       setCargando(false);
 
-      // Verificación temporal de credenciales (reemplazar con llamada real al backend)
       const correoNorm = correo.trim().toLowerCase();
       const esMedico = correoNorm === 'usuario@institucion.gob.mx' && password === 'password123';
-      const esAdmin = correoNorm === 'admin@donavida.gob.mx' && password === 'admin123';
-      const esValido = esMedico || esAdmin;
+      const esAdminIns = correoNorm === 'admins@institucion.gob.mx' && password === 'adminins123';
+      const esAdminGen = correoNorm === 'admin@donavida.gob.mx' && password === 'admin123';
+      const esValido = esMedico || esAdminIns || esAdminGen;
 
       if (esValido) {
         setLoginExitoso(true);
         setErrorLogin(false);
 
-        // Datos del usuario autenticado que se pasan al resto de la app
-        const datosUsuario = {
-          correo: correo.trim(),
-          rol: esAdmin ? 'admin' : 'medico',
-          nombre: esAdmin ? 'Admin DONAVIDA' : 'Personal Médico',
-          institucion: esAdmin ? 'Administrador · Sistema' : 'Hospital General',
-        };
+        let datosUsuario;
+        if (esMedico) {
+          datosUsuario = {
+            correo: correo.trim(),
+            rol: 'medico',
+            nombre: 'Personal Médico',
+            institucion: 'Hospital General',
+          };
+        } else if (esAdminIns) {
+          datosUsuario = {
+            correo: correo.trim(),
+            rol: 'admin_ins',
+            nombre: 'Admin. Institución',
+            institucion: 'Hospital General · Administrador',
+          };
+        } else {
+          datosUsuario = {
+            correo: correo.trim(),
+            rol: 'admin_gen',
+            nombre: 'Admin DONAVIDA',
+            institucion: 'Administrador · Sistema',
+          };
+        }
 
         setTimeout(() => {
           if (onLoginSuccess) onLoginSuccess(datosUsuario);
@@ -112,9 +123,7 @@ export default function Login({ onLoginSuccess }) {
             Ingresa con tu cuenta institucional para gestionar el inventario y las solicitudes de sangre.
           </p>
 
-          {/* alarta de credenciales incorrectas aparece 
-              Este mensaje debe activarse cuando el endpoint
-              POST /api/auth/login devuelva un error 401 / credenciales inválidas*/}
+          {/* alarta de credenciales incorrectas aparece*/}
           {errorLogin && (
             <div className="custom-alert-error" role="alert">
               <div className="alert-error-icon">
@@ -127,17 +136,7 @@ export default function Login({ onLoginSuccess }) {
             </div>
           )}
 
-          {loginExitoso && (
-            <div className="custom-alert-success" role="alert">
-              <span>¡Bienvenido(a)! Credenciales correctas. Redirigiendo al sistema...</span>
-            </div>
-          )}
-
-          {/* Seleccionar rol: El rol seleccionado debe enviarse junto con las
-              credenciales para que el backend valide que el usuario tiene
-              permisos para ese rol específico.
-              Endpoint: POST /api/auth/login
-              Body:     { correo, password, rolSeleccionado }*/}
+          {/* Seleccionar rol*/}
           <div className="login-role-selector">
             <span className="login-role-label">Ingresar como</span>
             <div className="login-role-buttons">

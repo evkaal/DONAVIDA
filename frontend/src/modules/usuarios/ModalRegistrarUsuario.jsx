@@ -1,13 +1,28 @@
 import React, { useState } from 'react';
 import './ModalRegistrarUsuario.css';
 
-export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess }) {
+export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, usuarioActual }) {
+  // Roles disponibles según quien crea el usuario:
+  // - admin_gen  → puede asignar cualquier rol (médico, admin_ins, admin_gen)
+  // - admin_ins  → solo puede asignar médico o admin_ins  (nunca admin_gen)
+  const esAdminGen = usuarioActual?.rol === 'admin_gen';
+  const rolesDisponibles = esAdminGen
+    ? [
+      { id: 'medico', label: 'Personal médico' },
+      { id: 'admin_ins', label: 'Admin institucional' },
+      { id: 'admin_gen', label: 'Administrador general' },
+    ]
+    : [
+      { id: 'medico', label: 'Personal médico' },
+      { id: 'admin_ins', label: 'Admin institucional' },
+    ];
+
   // Estados de los campos del formulario
   const [nombre, setNombre] = useState('');
   const [correo, setCorreo] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [rol, setRol] = useState('Hospital'); // 'Administrador' | 'Banco de sangre' | 'Hospital'
+  const [rol, setRol] = useState('medico');
   const [institucion, setInstitucion] = useState('Hospital General');
   const [cuentaActiva, setCuentaActiva] = useState(true);
 
@@ -16,20 +31,6 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess }
 
   if (!isOpen) return null;
 
-  // =========================================================================
-  //  MANEJADOR DE REGISTRO (PROPUESTA PARA EL BACKEND):
-  //
-  // Endpoint esperado: POST /api/usuarios
-  // Payload enviado:
-  // {
-  //   nombre: string,
-  //   correo: string,
-  //   password: string,
-  //   rol: string,           // 'Administrador' | 'Banco de sangre' | 'Hospital'
-  //   institucion: string,
-  //   activo: boolean
-  // }
-  // =========================================================================
   const handleSubmit = (e, guardarOtro = false) => {
     e.preventDefault();
 
@@ -143,7 +144,8 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess }
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                  />                  <button
+                  />
+                  <button
                     type="button"
                     className="password-eye-btn-modal"
                     onClick={() => setMostrarPassword(!mostrarPassword)}
@@ -195,42 +197,24 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess }
 
             <div className="form-group-modal">
               <label className="form-label-modal">Rol</label>
+
+              {/* Tarjetas de rol — se generan según el rol del usuario logueado:   */}
+              {/* admin_ins -> Personal médico + Admin institucional                  */}
+              {/* admin_gen -> Personal médico + Admin institucional + Admin general  */}
               <div className="role-cards-grid">
-                {/* Opción 1: Administrador */}
-                <button
-                  type="button"
-                  className={`role-card-btn ${rol === 'Administrador' ? 'active' : ''}`}
-                  onClick={() => setRol('Administrador')}
-                >
-                  <span className="role-radio-circle">
-                    {rol === 'Administrador' && <span className="role-radio-dot"></span>}
-                  </span>
-                  <span>Administrador</span>
-                </button>
-
-                {/* Opción 2: Banco de sangre */}
-                <button
-                  type="button"
-                  className={`role-card-btn ${rol === 'Banco de sangre' ? 'active' : ''}`}
-                  onClick={() => setRol('Banco de sangre')}
-                >
-                  <span className="role-radio-circle">
-                    {rol === 'Banco de sangre' && <span className="role-radio-dot"></span>}
-                  </span>
-                  <span>Banco de sangre</span>
-                </button>
-
-                {/* Opción 3: Hospital */}
-                <button
-                  type="button"
-                  className={`role-card-btn ${rol === 'Hospital' ? 'active' : ''}`}
-                  onClick={() => setRol('Hospital')}
-                >
-                  <span className="role-radio-circle">
-                    {rol === 'Hospital' && <span className="role-radio-dot"></span>}
-                  </span>
-                  <span>Hospital</span>
-                </button>
+                {rolesDisponibles.map((opcion) => (
+                  <button
+                    key={opcion.id}
+                    type="button"
+                    className={`role-card-btn ${rol === opcion.id ? 'active' : ''}`}
+                    onClick={() => setRol(opcion.id)}
+                  >
+                    <span className="role-radio-circle">
+                      {rol === opcion.id && <span className="role-radio-dot"></span>}
+                    </span>
+                    <span>{opcion.label}</span>
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -319,4 +303,3 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess }
     </div>
   );
 }
-
