@@ -1,17 +1,59 @@
-import React, { useState } from 'react';
-import './Dashboard.css';
+import React, { useState, useEffect } from "react";
+import { getDashboardStats } from "../../services/dashboardService";
+import "./Dashboard.css";
 
 export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
   // Estado para la opción seleccionada del menú lateral
-  const [moduloActivo, setModuloActivo] = useState('dashboard');
+  const [moduloActivo, setModuloActivo] = useState("dashboard");
 
-  // - 'medico': Ve módulos de gestión clínica (Registro, Solicitudes, Stock, etc.)
-  // - 'admin': Ve módulos estratégicos (Stock, Histórico y Gestión de usuarios)
-  const esAdmin = usuario?.rol === 'admin' || (typeof usuario === 'string' && usuario.includes('admin'));
-  const rol = esAdmin ? 'admin' : 'medico';
-  const nombreUsuario = usuario?.nombre || (esAdmin ? 'Admin DONAVIDA' : 'Personal Médico');
-  const institucionUsuario = usuario?.institucion || (esAdmin ? 'Administrador · Sistema' : 'Hospital General');
-  const avatarIniciales = esAdmin ? 'AD' : (usuario?.correo ? usuario.correo.substring(0, 2).toUpperCase() : 'PM');
+  // Estado para almacenar las métricas reales que vienen de Go
+  const [stats, setStats] = useState({
+    unidades_disponibles: 0,
+    proximas_caducar: 0,
+    solicitudes_pendientes: 0,
+    niveles_criticos: 0,
+  });
+  const [cargando, setCargando] = useState(true);
+
+  const [stockTipos, setStockTipos] = useState([]);
+const [solicitudesRecientes, setSolicitudesRecientes] = useState([]);
+
+  // Petición al backend al cargar el componente
+  useEffect(() => {
+  const cargarDatosDashboard = async () => {
+    try {
+      const statsData = await getDashboardStats();
+      setStats(statsData);
+
+      const stockData = await getStockPorTipo();
+      setStockTipos(stockData || []);
+
+      const solicitudesData = await getSolicitudesRecientes();
+      setSolicitudesRecientes(solicitudesData || []);
+    } catch (err) {
+      console.error("Error al cargar los datos del dashboard:", err);
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  cargarDatosDashboard();
+}, []);
+  
+  const esAdmin =
+    usuario?.rol === "admin" ||
+    (typeof usuario === "string" && usuario.includes("admin"));
+  const rol = esAdmin ? "admin" : "medico";
+  const nombreUsuario =
+    usuario?.nombre || (esAdmin ? "Admin DONAVIDA" : "Personal Médico");
+  const institucionUsuario =
+    usuario?.institucion ||
+    (esAdmin ? "Administrador · Sistema" : "Hospital General");
+  const avatarIniciales = esAdmin
+    ? "AD"
+    : usuario?.correo
+      ? usuario.correo.substring(0, 2).toUpperCase()
+      : "PM";
 
   // =========================================================================
   // PROPUESTA DE INTEGRACIÓN PARA EL BACKEND (Go / REST API):
@@ -75,11 +117,15 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
             <li className="dash-nav-item">
               <button
                 type="button"
-                className={`dash-nav-link ${moduloActivo === 'dashboard' ? 'active' : ''}`}
-                onClick={() => setModuloActivo('dashboard')}
+                className={`dash-nav-link ${moduloActivo === "dashboard" ? "active" : ""}`}
+                onClick={() => setModuloActivo("dashboard")}
               >
                 <span className="dash-nav-icon">
-                  <img src="/src/assets/iconos_dash/panel-de-control.png" alt="Dashboard" className="dash-nav-icon-img" />
+                  <img
+                    src="/src/assets/iconos_dash/panel-de-control.png"
+                    alt="Dashboard"
+                    className="dash-nav-icon-img"
+                  />
                 </span>
                 <span className="dash-nav-text">Dashboard</span>
               </button>
@@ -90,11 +136,15 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
               <li className="dash-nav-item">
                 <button
                   type="button"
-                  className={`dash-nav-link ${moduloActivo === 'registro' ? 'active' : ''}`}
-                  onClick={() => setModuloActivo('registro')}
+                  className={`dash-nav-link ${moduloActivo === "registro" ? "active" : ""}`}
+                  onClick={() => setModuloActivo("registro")}
                 >
                   <span className="dash-nav-icon">
-                    <img src="/src/assets/iconos_dash/aplicaciones-anadir.png" alt="Registro de unidades" className="dash-nav-icon-img" />
+                    <img
+                      src="/src/assets/iconos_dash/aplicaciones-anadir.png"
+                      alt="Registro de unidades"
+                      className="dash-nav-icon-img"
+                    />
                   </span>
                   <span className="dash-nav-text">Registro de unidades</span>
                 </button>
@@ -105,11 +155,15 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
             <li className="dash-nav-item">
               <button
                 type="button"
-                className={`dash-nav-link ${moduloActivo === 'stock' ? 'active' : ''}`}
-                onClick={() => setModuloActivo('stock')}
+                className={`dash-nav-link ${moduloActivo === "stock" ? "active" : ""}`}
+                onClick={() => setModuloActivo("stock")}
               >
                 <span className="dash-nav-icon">
-                  <img src="/src/assets/iconos_dash/caja-alt.png" alt="Stock de inventario" className="dash-nav-icon-img" />
+                  <img
+                    src="/src/assets/iconos_dash/caja-alt.png"
+                    alt="Stock de inventario"
+                    className="dash-nav-icon-img"
+                  />
                 </span>
                 <span className="dash-nav-text">Stock de inventario</span>
               </button>
@@ -119,11 +173,15 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
             <li className="dash-nav-item">
               <button
                 type="button"
-                className={`dash-nav-link ${moduloActivo === 'historico' ? 'active' : ''}`}
-                onClick={() => setModuloActivo('historico')}
+                className={`dash-nav-link ${moduloActivo === "historico" ? "active" : ""}`}
+                onClick={() => setModuloActivo("historico")}
               >
                 <span className="dash-nav-icon">
-                  <img src="/src/assets/iconos_dash/reloj-tres.png" alt="Histórico" className="dash-nav-icon-img" />
+                  <img
+                    src="/src/assets/iconos_dash/reloj-tres.png"
+                    alt="Histórico"
+                    className="dash-nav-icon-img"
+                  />
                 </span>
                 <span className="dash-nav-text">Histórico</span>
               </button>
@@ -134,11 +192,15 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
               <li className="dash-nav-item">
                 <button
                   type="button"
-                  className={`dash-nav-link ${moduloActivo === 'solicitud' ? 'active' : ''}`}
-                  onClick={() => setModuloActivo('solicitud')}
+                  className={`dash-nav-link ${moduloActivo === "solicitud" ? "active" : ""}`}
+                  onClick={() => setModuloActivo("solicitud")}
                 >
                   <span className="dash-nav-icon">
-                    <img src="/src/assets/iconos_dash/avion-de-papel.png" alt="Solicitud de unidades" className="dash-nav-icon-img" />
+                    <img
+                      src="/src/assets/iconos_dash/avion-de-papel.png"
+                      alt="Solicitud de unidades"
+                      className="dash-nav-icon-img"
+                    />
                   </span>
                   <span className="dash-nav-text">Solicitud de unidades</span>
                 </button>
@@ -150,11 +212,15 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
               <li className="dash-nav-item">
                 <button
                   type="button"
-                  className={`dash-nav-link ${moduloActivo === 'entrantes' ? 'active' : ''}`}
-                  onClick={() => setModuloActivo('entrantes')}
+                  className={`dash-nav-link ${moduloActivo === "entrantes" ? "active" : ""}`}
+                  onClick={() => setModuloActivo("entrantes")}
                 >
                   <span className="dash-nav-icon">
-                    <img src="/src/assets/iconos_dash/bandeja-de-entrada.png" alt="Solicitudes entrantes" className="dash-nav-icon-img" />
+                    <img
+                      src="/src/assets/iconos_dash/bandeja-de-entrada.png"
+                      alt="Solicitudes entrantes"
+                      className="dash-nav-icon-img"
+                    />
                   </span>
                   <span className="dash-nav-text">Solicitudes entrantes</span>
                 </button>
@@ -164,17 +230,21 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
 
           {/* SECCIÓN ADMINISTRACIÓN (Solo visible para rol Admin) */}
           {esAdmin && (
-            <div style={{ marginTop: '1.25rem' }}>
+            <div style={{ marginTop: "1.25rem" }}>
               <div className="dash-nav-section-title">ADMINISTRACIÓN</div>
               <ul className="dash-nav-list">
                 <li className="dash-nav-item">
                   <button
                     type="button"
-                    className={`dash-nav-link ${moduloActivo === 'usuarios' ? 'active' : ''}`}
-                    onClick={() => onCambiarModulo('usuarios')}
+                    className={`dash-nav-link ${moduloActivo === "usuarios" ? "active" : ""}`}
+                    onClick={() => onCambiarModulo("usuarios")}
                   >
                     <span className="dash-nav-icon dash-user-mgmt-icon">
-                      <img src="/src/assets/iconos_dash/usuarios-alt.png" alt="Gestión de usuarios" className="dash-nav-icon-img" />
+                      <img
+                        src="/src/assets/iconos_dash/usuarios-alt.png"
+                        alt="Gestión de usuarios"
+                        className="dash-nav-icon-img"
+                      />
                     </span>
                     <span className="dash-nav-text">Gestión de usuarios</span>
                   </button>
@@ -188,7 +258,14 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
         <div className="dash-sidebar-bottom">
           <button type="button" className="dash-btn-logout" onClick={onLogout}>
             <span className="dash-logout-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                 <polyline points="16 17 21 12 16 7" />
                 <line x1="21" y1="12" x2="9" y2="12" />
@@ -204,7 +281,11 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
         <header className="dash-topbar">
           <div className="dash-search-wrapper">
             <span className="dash-search-icon">
-              <img src="/src/assets/iconos_dash/busqueda.png" alt="Buscar" className="dash-search-icon-img" />
+              <img
+                src="/src/assets/iconos_dash/busqueda.png"
+                alt="Buscar"
+                className="dash-search-icon-img"
+              />
             </span>
             <input
               type="text"
@@ -214,8 +295,16 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
           </div>
 
           <div className="dash-topbar-actions">
-            <button type="button" className="dash-notif-btn" title="Notificaciones">
-              <img src="/src/assets/iconos_dash/campana.png" alt="Notificaciones" className="dash-nav-icon-img" />
+            <button
+              type="button"
+              className="dash-notif-btn"
+              title="Notificaciones"
+            >
+              <img
+                src="/src/assets/iconos_dash/campana.png"
+                alt="Notificaciones"
+                className="dash-nav-icon-img"
+              />
             </button>
 
             {/* Perfil de usuario */}
@@ -228,7 +317,14 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                 <span className="dash-user-role">{institucionUsuario}</span>
               </div>
               {/* Flecha dropdown */}
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#94a3b8"
+                strokeWidth="2.5"
+              >
                 <polyline points="6 9 12 15 18 9" />
               </svg>
             </div>
@@ -249,10 +345,14 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                   <button
                     type="button"
                     className="dash-btn-primary"
-                    onClick={() => onCambiarModulo('usuarios')}
+                    onClick={() => onCambiarModulo("usuarios")}
                   >
                     <span className="dash-action-icon">
-                      <img src="/src/assets/iconos_dash/agregar-usuario.png" alt="Gestión de usuarios" className="dash-nav-icon-img" />
+                      <img
+                        src="/src/assets/iconos_dash/agregar-usuario.png"
+                        alt="Gestión de usuarios"
+                        className="dash-nav-icon-img"
+                      />
                     </span>
                     <span>Registrar usuario</span>
                   </button>
@@ -261,14 +361,22 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                   <>
                     <button type="button" className="dash-btn-secondary">
                       <span className="dash-action-icon">
-                        <img src="/src/assets/iconos_dash/agregar.png" alt="Registrar unidad" className="dash-nav-icon-img" />
+                        <img
+                          src="/src/assets/iconos_dash/agregar.png"
+                          alt="Registrar unidad"
+                          className="dash-nav-icon-img"
+                        />
                       </span>
                       <span>Registrar unidad</span>
                     </button>
 
                     <button type="button" className="dash-btn-primary">
                       <span className="dash-action-icon">
-                        <img src="/src/assets/iconos_dash/avion-de-papel2.png" alt="Nueva solicitud" className="dash-nav-icon-img" />
+                        <img
+                          src="/src/assets/iconos_dash/avion-de-papel2.png"
+                          alt="Nueva solicitud"
+                          className="dash-nav-icon-img"
+                        />
                       </span>
                       <span>Nueva solicitud</span>
                     </button>
@@ -294,7 +402,11 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                     <div className="dash-kpi-top">
                       <span className="dash-kpi-title">Stock total</span>
                       <div className="dash-kpi-icon-badge badge-red-subtle">
-                        <img src="/src/assets/iconos_dash/sangre.png" alt="Stock total" className="dash-nav-icon-img" />
+                        <img
+                          src="/src/assets/iconos_dash/sangre.png"
+                          alt="Stock total"
+                          className="dash-nav-icon-img"
+                        />
                       </div>
                     </div>
                     <div className="dash-kpi-value-area">
@@ -302,7 +414,9 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                       <h3 className="dash-kpi-number">0</h3>
                     </div>
                     <div className="dash-kpi-footer">
-                      <span className="dash-kpi-subtext-muted">Unidades en inventario</span>
+                      <span className="dash-kpi-subtext-muted">
+                        Unidades en inventario
+                      </span>
                     </div>
                   </div>
 
@@ -313,7 +427,11 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                     <div className="dash-kpi-top">
                       <span className="dash-kpi-title">Próximas a caducar</span>
                       <div className="dash-kpi-icon-badge badge-orange-subtle">
-                        <img src="/src/assets/iconos_dash/reloj.png" alt="Próximas a caducar" className="dash-nav-icon-img" />
+                        <img
+                          src="/src/assets/iconos_dash/reloj.png"
+                          alt="Próximas a caducar"
+                          className="dash-nav-icon-img"
+                        />
                       </div>
                     </div>
                     <div className="dash-kpi-value-area">
@@ -321,7 +439,9 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                       <h3 className="dash-kpi-number">0</h3>
                     </div>
                     <div className="dash-kpi-footer">
-                      <span className="dash-kpi-subtext-muted">Próximos 7 días</span>
+                      <span className="dash-kpi-subtext-muted">
+                        Próximos 7 días
+                      </span>
                     </div>
                   </div>
 
@@ -330,9 +450,15 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                       Campo esperado: { tiposCriticos: 0 } */}
                   <div className="dash-kpi-card">
                     <div className="dash-kpi-top">
-                      <span className="dash-kpi-title">Tipos en nivel crítico</span>
+                      <span className="dash-kpi-title">
+                        Tipos en nivel crítico
+                      </span>
                       <div className="dash-kpi-icon-badge badge-crimson-subtle">
-                        <img src="/src/assets/iconos_dash/advertencia.png" alt="Tipos en nivel crítico" className="dash-nav-icon-img" />
+                        <img
+                          src="/src/assets/iconos_dash/advertencia.png"
+                          alt="Tipos en nivel crítico"
+                          className="dash-nav-icon-img"
+                        />
                       </div>
                     </div>
                     <div className="dash-kpi-value-area">
@@ -340,7 +466,9 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                       <h3 className="dash-kpi-number">0</h3>
                     </div>
                     <div className="dash-kpi-footer">
-                      <span className="dash-kpi-subtext-muted">Tipos sanguíneos ≤ 10 unidades</span>
+                      <span className="dash-kpi-subtext-muted">
+                        Tipos sanguíneos ≤ 10 unidades
+                      </span>
                     </div>
                   </div>
 
@@ -349,9 +477,15 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                       Campo esperado: { totalUsuarios: 0 } */}
                   <div className="dash-kpi-card">
                     <div className="dash-kpi-top">
-                      <span className="dash-kpi-title">Usuarios registrados</span>
+                      <span className="dash-kpi-title">
+                        Usuarios registrados
+                      </span>
                       <div className="dash-kpi-icon-badge badge-blue-subtle">
-                        <img src="/src/assets/iconos_dash/usuarios.png" alt="Usuarios registrados" className="dash-nav-icon-img" />
+                        <img
+                          src="/src/assets/iconos_dash/usuarios.png"
+                          alt="Usuarios registrados"
+                          className="dash-nav-icon-img"
+                        />
                       </div>
                     </div>
                     <div className="dash-kpi-value-area">
@@ -359,7 +493,9 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                       <h3 className="dash-kpi-number">0</h3>
                     </div>
                     <div className="dash-kpi-footer">
-                      <span className="dash-kpi-subtext-muted">Total en el sistema</span>
+                      <span className="dash-kpi-subtext-muted">
+                        Total en el sistema
+                      </span>
                     </div>
                   </div>
                 </>
@@ -369,76 +505,103 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                   {/* KPI M1: Unidades disponibles
                       [BACKEND] GET /api/dashboard/medico/kpis
                       Campo esperado: { unidadesDisponibles: 0 } */}
+                  {/* KPI M1: Unidades disponibles */}
                   <div className="dash-kpi-card">
                     <div className="dash-kpi-top">
-                      <span className="dash-kpi-title">Unidades disponibles</span>
+                      <span className="dash-kpi-title">
+                        Unidades disponibles
+                      </span>
                       <div className="dash-kpi-icon-badge badge-red-subtle">
-                        <img src="/src/assets/iconos_dash/sangre.png" alt="Unidades disponibles" className="dash-nav-icon-img" />
+                        <img
+                          src="/src/assets/iconos_dash/sangre.png"
+                          alt="Unidades disponibles"
+                          className="dash-nav-icon-img"
+                        />
                       </div>
                     </div>
                     <div className="dash-kpi-value-area">
-                      {/* [BACKEND] Reemplazar 0 con unidadesDisponibles del endpoint */}
-                      <h3 className="dash-kpi-number">0</h3>
+                      <h3 className="dash-kpi-number">
+                        {cargando ? "..." : stats.unidades_disponibles}
+                      </h3>
                     </div>
                     <div className="dash-kpi-footer">
-                      <span className="dash-kpi-subtext-muted">Sin registros hoy</span>
+                      <span className="dash-kpi-subtext-muted">
+                        Inventario actual
+                      </span>
                     </div>
                   </div>
 
-                  {/* KPI M2: Próximas a caducar
-                      [BACKEND] GET /api/dashboard/medico/kpis
-                      Campo esperado: { proximasCaducar: 0 } */}
+                  {/* KPI M2: Próximas a caducar */}
                   <div className="dash-kpi-card">
                     <div className="dash-kpi-top">
                       <span className="dash-kpi-title">Próximas a caducar</span>
                       <div className="dash-kpi-icon-badge badge-orange-subtle">
-                        <img src="/src/assets/iconos_dash/reloj.png" alt="Próximas a caducar" className="dash-nav-icon-img" />
+                        <img
+                          src="/src/assets/iconos_dash/reloj.png"
+                          alt="Próximas a caducar"
+                          className="dash-nav-icon-img"
+                        />
                       </div>
                     </div>
                     <div className="dash-kpi-value-area">
-                      {/* [BACKEND] Reemplazar 0 con proximasCaducar del endpoint */}
-                      <h3 className="dash-kpi-number">0</h3>
+                      <h3 className="dash-kpi-number">
+                        {cargando ? "..." : stats.proximas_caducar}
+                      </h3>
                     </div>
                     <div className="dash-kpi-footer">
-                      <span className="dash-kpi-subtext-muted">Próximos 7 días</span>
+                      <span className="dash-kpi-subtext-muted">
+                        Próximos 7 días
+                      </span>
                     </div>
                   </div>
 
-                  {/* KPI M3: Solicitudes pendientes
-                      [BACKEND] GET /api/dashboard/medico/kpis
-                      Campo esperado: { solicitudesPendientes: 0 } */}
+                  {/* KPI M3: Solicitudes pendientes */}
                   <div className="dash-kpi-card">
                     <div className="dash-kpi-top">
-                      <span className="dash-kpi-title">Solicitudes pendientes</span>
+                      <span className="dash-kpi-title">
+                        Solicitudes pendientes
+                      </span>
                       <div className="dash-kpi-icon-badge badge-blue-subtle">
-                        <img src="/src/assets/iconos_dash/bandeja.png" alt="Solicitudes pendientes" className="dash-nav-icon-img" />
+                        <img
+                          src="/src/assets/iconos_dash/bandeja.png"
+                          alt="Solicitudes pendientes"
+                          className="dash-nav-icon-img"
+                        />
                       </div>
                     </div>
                     <div className="dash-kpi-value-area">
-                      {/* [BACKEND] Reemplazar 0 con solicitudesPendientes del endpoint */}
-                      <h3 className="dash-kpi-number">0</h3>
+                      <h3 className="dash-kpi-number">
+                        {cargando ? "..." : stats.solicitudes_pendientes}
+                      </h3>
                     </div>
                     <div className="dash-kpi-footer">
-                      <span className="dash-kpi-subtext-muted">Sin solicitudes urgentes</span>
+                      <span className="dash-kpi-subtext-muted">
+                        Urgentes por atender
+                      </span>
                     </div>
                   </div>
 
-                  {/* KPI M4: Niveles críticos
-                      [BACKEND] GET /api/dashboard/medico/kpis
-                      Campo esperado: { nivelesCriticos: 0 } */}
+                  {/* KPI M4: Niveles críticos */}
                   <div className="dash-kpi-card">
                     <div className="dash-kpi-top">
                       <span className="dash-kpi-title">Niveles críticos</span>
                       <div className="dash-kpi-icon-badge badge-crimson-subtle">
-                        <img src="/src/assets/iconos_dash/advertencia.png" alt="Niveles críticos" className="dash-nav-icon-img" />
+                        <img
+                          src="/src/assets/iconos_dash/advertencia.png"
+                          alt="Niveles críticos"
+                          className="dash-nav-icon-img"
+                        />
                       </div>
                     </div>
                     <div className="dash-kpi-value-area">
-                      {/* [BACKEND] Reemplazar 0 con nivelesCriticos del endpoint */}
-                      <h3 className="dash-kpi-number">0</h3>
+                      <h3 className="dash-kpi-number">
+                        {cargando ? "..." : stats.niveles_criticos}
+                      </h3>
                     </div>
                     <div className="dash-kpi-footer">
-                      <span className="dash-kpi-subtext-muted">Sin tipos en nivel crítico</span>
+                      <span className="dash-kpi-subtext-muted">
+                        Bajo umbral mínimo
+                      </span>
                     </div>
                   </div>
                 </>
@@ -456,8 +619,12 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
               <div className="dash-card">
                 <div className="dash-card-header">
                   <div>
-                    <h2 className="dash-card-title">Stock por tipo sanguíneo</h2>
-                    <p className="dash-card-subtitle">Unidades disponibles hoy</p>
+                    <h2 className="dash-card-title">
+                      Stock por tipo sanguíneo
+                    </h2>
+                    <p className="dash-card-subtitle">
+                      Unidades disponibles hoy
+                    </p>
                   </div>
                   <div className="dash-chart-legend">
                     <span>
@@ -475,7 +642,10 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                 Endpoint: GET /api/dashboard/stock-tipos
                 Payload:  [{ tipo: 'A+', cantidad: 0, esCritico: false }, ...] */}
                 <div className="dash-chart-blank-body">
-                  <span>[ESPACIO RESERVADO: Aquí se monta el componente de la Gráfica de Barras por Tipo Sanguíneo]</span>
+                  <span>
+                    [ESPACIO RESERVADO: Aquí se monta el componente de la
+                    Gráfica de Barras por Tipo Sanguíneo]
+                  </span>
                 </div>
               </div>
 
@@ -487,8 +657,12 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                 <div className="dash-card">
                   <div className="dash-card-header">
                     <div>
-                      <h2 className="dash-card-title">Últimos usuarios registrados</h2>
-                      <p className="dash-card-subtitle">Altas recientes en el sistema</p>
+                      <h2 className="dash-card-title">
+                        Últimos usuarios registrados
+                      </h2>
+                      <p className="dash-card-subtitle">
+                        Altas recientes en el sistema
+                      </p>
                     </div>
                     <a href="#usuarios" className="dash-card-link">
                       Ver todos
@@ -498,7 +672,10 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                   Aquí se mapea el listado obtenido del endpoint:
                   GET /api/dashboard/admin/usuarios-recientes */}
                   <div className="dash-requests-blank-body">
-                    <span>[ESPACIO RESERVADO: Aquí se mapean las filas de Últimos Usuarios Registrados]</span>
+                    <span>
+                      [ESPACIO RESERVADO: Aquí se mapean las filas de Últimos
+                      Usuarios Registrados]
+                    </span>
                   </div>
                 </div>
               ) : (
@@ -518,7 +695,10 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                   Aquí se mapea el listado obtenido del endpoint:
                   GET /api/solicitudes/recientes */}
                   <div className="dash-requests-blank-body">
-                    <span>[ESPACIO RESERVADO: Aquí se mapean las tarjetas/filas de Solicitudes Recientes]</span>
+                    <span>
+                      [ESPACIO RESERVADO: Aquí se mapean las tarjetas/filas de
+                      Solicitudes Recientes]
+                    </span>
                   </div>
                 </div>
               )}
@@ -530,7 +710,8 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                 <div>
                   <h2 className="dash-card-title">Actividad reciente</h2>
                   <p className="dash-card-subtitle">
-                    Trazabilidad de operaciones: responsable, fecha, hora y folio
+                    Trazabilidad de operaciones: responsable, fecha, hora y
+                    folio
                   </p>
                 </div>
                 <a href="#bitacora" className="dash-card-link">
@@ -552,7 +733,10 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                   Aquí se mapean las filas de actividad obtenidas de:
                   GET /api/bitacora/reciente */}
                 <div className="dash-table-empty-notice">
-                  <span>[ESPACIO RESERVADO: Aquí se mapean las filas de la Bitácora de Actividad Reciente]</span>
+                  <span>
+                    [ESPACIO RESERVADO: Aquí se mapean las filas de la Bitácora
+                    de Actividad Reciente]
+                  </span>
                 </div>
               </div>
             </section>

@@ -7,9 +7,9 @@ import { loginUser } from '../../services/authService';
 //    Body: { correo, password, rolSeleccionado }
 //    Response: { token, usuario: { nombre, rol, institucion } }
 const ROLES_INGRESO = [
-  { id: 'medico', label: 'Personal médico' },
-  { id: 'admin_ins', label: 'Admin. institución' },
-  { id: 'admin_gen', label: 'Admin. general' },
+  { id: 3, label: 'Personal médico' },
+  { id: 2, label: 'Admin. institución' },
+  { id: 1, label: 'Admin. general' },
 ];
 
 export default function Login({ onLoginSuccess }) {
@@ -19,8 +19,6 @@ export default function Login({ onLoginSuccess }) {
   const [recordarme, setRecordarme] = useState(false);
 
   // Estado del rol seleccionado
-  // (back) Este valor debe enviarse al endpoint de autenticación para
-  //    que el backend valide que el usuario tiene permisos para ese rol.
   const [rolSeleccionado, setRolSeleccionado] = useState('medico');
 
   // Estados de interfaz
@@ -29,9 +27,6 @@ export default function Login({ onLoginSuccess }) {
   const [errorLogin, setErrorLogin] = useState(false);
   const [loginExitoso, setLoginExitoso] = useState(false);
 
-  // usuarios de prueba:
-  // - Personal médico:     usuario@institucion.gob.mx  /  password123
-  // - Admin. general:      admin@donavida.gob.mx        /  admin123
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorLogin(false);
@@ -42,7 +37,8 @@ export default function Login({ onLoginSuccess }) {
       // Llamada real al backend en Go usando la capa de servicios de Axios
       const data = await loginUser({ 
         email: correo.trim(), 
-        password: password 
+        password: password,
+        rol_id: rolSeleccionado 
       });
 
       // Si el backend responde con éxito (200 OK)
@@ -57,7 +53,7 @@ export default function Login({ onLoginSuccess }) {
       // Redirigir al dashboard únicamente si el login fue exitoso
       setTimeout(() => {
         if (onLoginSuccess) {
-          onLoginSuccess(correo.trim());
+          onLoginSuccess(data)
         }
       }, 700);
 

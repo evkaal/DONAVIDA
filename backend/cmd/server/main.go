@@ -5,6 +5,7 @@ import (
 	"donavida-backend/internal/handlers"
 	"fmt"
 	"net/http"
+	
 )
 
 // Middleware para habilitar CORS y permitir peticiones desde React (Vite)
@@ -31,8 +32,15 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Rutas de autenticación
-	http.HandleFunc("/api/register", handlers.HabilitarCORS(handlers.Register))
-	http.HandleFunc("/api/login", handlers.HabilitarCORS(handlers.Login))
+	//http.HandleFunc("/api/register", handlers.HabilitarCORS(handlers.Register))
+	//http.HandleFunc("/api/login", handlers.HabilitarCORS(handlers.Login))
+
+   mux.HandleFunc("/api/register", handlers.Register)
+    mux.HandleFunc("/api/login", handlers.Login)
+   mux.HandleFunc("/api/dashboard/stats", handlers.GetDashboardStats)
+   mux.HandleFunc("/api/dashboard/stock-tipos", handlers.GetStockPorTipo)
+   mux.HandleFunc("/api/solicitudes/recientes", handlers.GetSolicitudesRecientes)
+   
 
 	// Ruta de prueba
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
