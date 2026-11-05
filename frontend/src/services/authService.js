@@ -19,3 +19,13 @@ export const loginUser = async (credentials) => {
     throw error.response?.data || error.message;
   }
 };
+
+// Funcion para agregar unidades
+export const registrarUnidad = async (datosUnidad) => {
+  try {
+    const response = await api.post('/unidades', datosUnidad);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error.message;
+  }
+};

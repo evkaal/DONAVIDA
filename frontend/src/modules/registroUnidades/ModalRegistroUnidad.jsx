@@ -1,19 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import './ModalRegistroUnidad.css';
+import { registrarUnidad } from '../../services/authService'; // Asegúrate de ajustar esta ruta según tu estructura de carpetas
 
-// Catálogo de hemocomponentes con su vigencia y volumen por defecto
+// Catálogo de hemocomponentes con su vigencia, volumen y su ID correspondiente en la BD
 const HEMOCOMPONENTES_CATALOGO = {
-  'Concentrado eritrocitario': { vigenciaDias: 42, volumenDefault: '300 ml' },
-  'Sangre total': { vigenciaDias: 35, volumenDefault: '450 ml' },
-  'Plaquetas': { vigenciaDias: 5, volumenDefault: '250 ml' },
-  'Plasma fresco congelado': { vigenciaDias: 365, volumenDefault: '200 ml' },
-  'Crioprecipitado': { vigenciaDias: 365, volumenDefault: '150 ml' },
+  'Concentrado eritrocitario': { id: 1, vigenciaDias: 42, volumenDefault: '300 ml' },
+  'Sangre total': { id: 2, vigenciaDias: 35, volumenDefault: '450 ml' },
+  'Plaquetas': { id: 3, vigenciaDias: 5, volumenDefault: '250 ml' },
+  'Plasma fresco congelado': { id: 4, vigenciaDias: 365, volumenDefault: '200 ml' },
+  'Crioprecipitado': { id: 5, vigenciaDias: 365, volumenDefault: '150 ml' },
+};
+
+// Mapeo de tipos sanguíneos a su respectivo ID en la tabla tipos_sangre
+const TIPOS_SANGRE_MAP = {
+  'A+': 1, 'A-': 2, 'B+': 3, 'B-': 4, 
+  'AB+': 5, 'AB-': 6, 'O+': 7, 'O-': 8
 };
 
 const TIPOS_SANGUINEOS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
 export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, usuario }) {
-  // 1. Estados locales del formulario
   const institucionDefecto = usuario?.institucion || 'Hospital General';
   const [codigo, setCodigo] = useState('UN-2032');
   const [tipoSangre, setTipoSangre] = useState('O+');
@@ -22,8 +28,10 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
   const [vigenciaDias, setVigenciaDias] = useState(42);
   const [fechaExtraccion, setFechaExtraccion] = useState('2026-10-21');
   const [fechaCaducidad, setFechaCaducidad] = useState('2026-12-02');
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Actualizar vigencia y volumen sugerido al cambiar el hemocomponente
+  // Actualizar vigencia, volumen y ID al cambiar el hemocomponente
   const handleCambioHemocomponente = (nuevoHemo) => {
     setHemocomponente(nuevoHemo);
     const config = HEMOCOMPONENTES_CATALOGO[nuevoHemo];
@@ -31,7 +39,6 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
       setVigenciaDias(config.vigenciaDias);
       setVolumen(config.volumenDefault);
 
-      // Recalcular fecha de caducidad si hay fecha de extracción válida
       if (fechaExtraccion) {
         const fecha = new Date(fechaExtraccion);
         if (!isNaN(fecha.getTime())) {
@@ -47,35 +54,49 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e, guardarOtro = false) => {
+  const handleSubmit = async (e, guardarOtro = false) => {
     e.preventDefault();
+    setCargando(true);
+    setError(null);
 
-    const nuevaUnidad = {
-      codigo: codigo.trim(),
-      institucion: institucionDefecto,
-      tipoSangre,
-      hemocomponente,
-      volumen,
-      vigenciaDias,
-      fechaExtraccion,
-      fechaCaducidad,
-      estado: 'Disponible',
+    // Mapear los valores visuales a los IDs que espera el backend y la base de datos
+    const tipoSangreId = TIPOS_SANGRE_MAP[tipoSangre] || 1;
+    const tipoHemocompConfig = HEMOCOMPONENTES_CATALOGO[hemocomponente];
+    const tipoHemocomponenteId = tipoHemocompConfig ? tipoHemocompConfig.id : 1;
+
+    const nuevaUnidadPayload = {
+      codigo_unidad: codigo.trim(),
+      tipo_sangre_id: Number(tipoSangreId),
+      tipo_hemocomponente_id: Number(tipoHemocomponenteId),
+      estado_id: 1,         // 1 = Disponible en estados_hemocomponente
+      institucion_id: 1,    // 1 = Hospital General en instituciones
+      fecha_extraccion: fechaExtraccion,
+      fecha_caducidad: fechaCaducidad,
     };
 
-    // [BACKEND] Aquí se llama al servicio: await api.post('/unidades', nuevaUnidad);
-    console.log('[BACKEND] POST /api/unidades:', nuevaUnidad);
+    try {
+      // Llamada real al endpoint de Go que creamos
+      const responseData = await registrarUnidad(nuevaUnidadPayload);
+      console.log('[BACKEND] Unidad guardada con éxito:', responseData);
 
-    if (onSaveSuccess) {
-      onSaveSuccess(nuevaUnidad);
-    }
+      setCargando(false);
 
-    if (guardarOtro) {
-      // Limpiar y generar un siguiente código sugerido
-      const match = codigo.match(/\d+/);
-      const siguienteNumero = match ? parseInt(match[0], 10) + 1 : 2033;
-      setCodigo(`UN-${siguienteNumero}`);
-    } else {
-      onClose();
+      if (onSaveSuccess) {
+        onSaveSuccess({ ...nuevaUnidadPayload, id: responseData.id, estado: 'Disponible' });
+      }
+
+      if (guardarOtro) {
+        // Limpiar y generar un siguiente código sugerido
+        const match = codigo.match(/\d+/);
+        const siguienteNumero = match ? parseInt(match[0], 10) + 1 : 2033;
+        setCodigo(`UN-${siguienteNumero}`);
+      } else {
+        onClose();
+      }
+    } catch (err) {
+      setCargando(false);
+      setError('Hubo un error al registrar la unidad en el servidor.');
+      console.error('Error al registrar unidad:', err);
     }
   };
 
@@ -98,6 +119,8 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
             ✕
           </button>
         </header>
+
+        {error && <div style={{ color: 'red', padding: '0 24px', fontSize: '14px' }}>{error}</div>}
 
         {/* Formulario */}
         <form onSubmit={(e) => handleSubmit(e, false)}>
@@ -258,7 +281,7 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
           </div>
 
           <footer className="mreg-u-footer">
-            <button type="button" className="btn-mreg-cancel" onClick={onClose}>
+            <button type="button" className="btn-mreg-cancel" onClick={onClose} disabled={cargando}>
               Cancelar
             </button>
 
@@ -266,18 +289,19 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
               type="button"
               className="btn-mreg-secondary"
               onClick={(e) => handleSubmit(e, true)}
+              disabled={cargando}
             >
               <span className="mreg-action-icon">
                 <img src="/src/assets/iconos_gestionU/agregar.png" alt="" />
               </span>
-              <span>Guardar y agregar otra</span>
+              <span>{cargando ? 'Guardando...' : 'Guardar y agregar otra'}</span>
             </button>
 
-            <button type="submit" className="btn-mreg-primary">
+            <button type="submit" className="btn-mreg-primary" disabled={cargando}>
               <span className="mreg-action-icon">
                 <img src="/src/assets/iconos_gestionU/aceptar.png" alt="" />
               </span>
-              <span>Registrar unidad</span>
+              <span>{cargando ? 'Guardando...' : 'Registrar unidad'}</span>
             </button>
           </footer>
         </form>
@@ -285,4 +309,3 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
     </div>
   );
 }
-

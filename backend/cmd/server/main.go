@@ -33,11 +33,18 @@ func main() {
 	// Rutas de autenticación
 	mux.HandleFunc("/api/register", handlers.Register)
 	mux.HandleFunc("/api/login", handlers.Login)
+	//Registo de unidades
+	mux.HandleFunc("/api/unidades", handlers.RegistrarUnidad)
 
 	// Ruta de prueba
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Bienvenido al back"))
-	})
+        // Manejar 404 si no es la ruta exactísima '/'
+        if r.URL.Path != "/" {
+            http.NotFound(w, r)
+            return
+        }
+        w.Write([]byte("Bienvenido al back"))
+    })
 
 	fmt.Println("Servidor corriendo en el puerto 8080")
 
