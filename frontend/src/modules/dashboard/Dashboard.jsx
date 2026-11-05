@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { getDashboardStats } from "../../services/dashboardService";
+import {
+  getDashboardStats,
+  getStockPorTipo,
+  getSolicitudesRecientes,
+} from "../../services/dashboardService";
 import "./Dashboard.css";
 
 export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
@@ -16,30 +20,32 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
   const [cargando, setCargando] = useState(true);
 
   const [stockTipos, setStockTipos] = useState([]);
-const [solicitudesRecientes, setSolicitudesRecientes] = useState([]);
+  const [solicitudesRecientes, setSolicitudesRecientes] = useState([]);
+
+  const [actividadReciente] = useState([]);
 
   // Petición al backend al cargar el componente
   useEffect(() => {
-  const cargarDatosDashboard = async () => {
-    try {
-      const statsData = await getDashboardStats();
-      setStats(statsData);
+    const cargarDatosDashboard = async () => {
+      try {
+        const statsData = await getDashboardStats();
+        setStats(statsData);
 
-      const stockData = await getStockPorTipo();
-      setStockTipos(stockData || []);
+        const stockData = await getStockPorTipo();
+        setStockTipos(stockData || []);
 
-      const solicitudesData = await getSolicitudesRecientes();
-      setSolicitudesRecientes(solicitudesData || []);
-    } catch (err) {
-      console.error("Error al cargar los datos del dashboard:", err);
-    } finally {
-      setCargando(false);
-    }
-  };
+        const solicitudesData = await getSolicitudesRecientes();
+        setSolicitudesRecientes(solicitudesData || []);
+      } catch (err) {
+        console.error("Error al cargar los datos del dashboard:", err);
+      } finally {
+        setCargando(false);
+      }
+    };
 
-  cargarDatosDashboard();
-}, []);
-  
+    cargarDatosDashboard();
+  }, []);
+
   const esAdmin =
     usuario?.rol === "admin" ||
     (typeof usuario === "string" && usuario.includes("admin"));
@@ -641,11 +647,84 @@ const [solicitudesRecientes, setSolicitudesRecientes] = useState([]);
                 (ej: Chart.js, Recharts, ApexCharts o barras personalizadas)
                 Endpoint: GET /api/dashboard/stock-tipos
                 Payload:  [{ tipo: 'A+', cantidad: 0, esCritico: false }, ...] */}
-                <div className="dash-chart-blank-body">
-                  <span>
-                    [ESPACIO RESERVADO: Aquí se monta el componente de la
-                    Gráfica de Barras por Tipo Sanguíneo]
-                  </span>
+                <div
+                  className="dash-stock-container"
+                  style={{ padding: "16px" }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-end",
+                      height: "180px",
+                      borderBottom: "2px solid #e2e8f0",
+                      paddingBottom: "8px",
+                      gap: "12px",
+                    }}
+                  >
+                    {stockTipos.map((item, index) => {
+                      // Determinamos si es crítico (<= 10 unidades) según la regla de negocio del diseño
+                      const esCritico = item.cantidad <= 10;
+                      // Calculamos una altura proporcional para la barra (máximo 120px de alto visual)
+                      const alturaPx = Math.min(
+                        Math.max(item.cantidad * 2, 15),
+                        120,
+                      );
+
+                      return (
+                        <div
+                          key={`${item.tipo}-${index}`}
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            flex: 1,
+                            height: "100%",
+                            justifyContent: "flex-end",
+                          }}
+                        >
+                          {/* Número de unidades arriba de la barra */}
+                          <span
+                            style={{
+                              fontSize: "0.85rem",
+                              fontWeight: "bold",
+                              marginBottom: "6px",
+                              color: esCritico ? "#991b1b" : "#334155",
+                            }}
+                          >
+                            {item.cantidad}
+                          </span>
+
+                          {/* Barra vertical */}
+                          <div
+                            style={{
+                              width: "100%",
+                              maxWidth: "36px",
+                              height: `${alturaPx}px`,
+                              backgroundColor: esCritico
+                                ? "#dc2626"
+                                : "#fbcfe8", // Rojo intenso si es crítico, rosa claro si es normal
+                              borderTopLeftRadius: "6px",
+                              borderTopRightRadius: "6px",
+                              transition: "height 0.3s ease",
+                            }}
+                          />
+
+                          {/* Etiqueta del tipo sanguíneo abajo */}
+                          <span
+                            style={{
+                              fontSize: "0.85rem",
+                              fontWeight: "600",
+                              marginTop: "8px",
+                              color: "#64748b",
+                            }}
+                          >
+                            {item.tipo}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -694,11 +773,120 @@ const [solicitudesRecientes, setSolicitudesRecientes] = useState([]);
                   {/* [BACKEND / FRONTEND]: APARTADO PARA SOLICITUDES RECIENTES
                   Aquí se mapea el listado obtenido del endpoint:
                   GET /api/solicitudes/recientes */}
-                  <div className="dash-requests-blank-body">
-                    <span>
-                      [ESPACIO RESERVADO: Aquí se mapean las tarjetas/filas de
-                      Solicitudes Recientes]
-                    </span>
+                  <div
+                    className="dash-requests-container"
+                    style={{ padding: "8px 0" }}
+                  >
+                    {solicitudesRecientes.length === 0 ? (
+                      <span style={{ color: "#64748b", fontSize: "0.9rem" }}>
+                        No hay solicitudes recientes registradas.
+                      </span>
+                    ) : (
+                      solicitudesRecientes.map((sol, index) => {
+                        // Determinamos los colores del badge según el estado
+                        const estadoLower = (sol.estado || "").toLowerCase();
+                        let badgeBg = "#dcfce7"; // Verde (Atendida)
+                        let badgeColor = "#15803d";
+                        let dotColor = "#22c55e";
+
+                        if (estadoLower.includes("urgente")) {
+                          badgeBg = "#fee2e2"; // Rojo suave
+                          badgeColor = "#991b1b";
+                          dotColor = "#dc2626";
+                        } else if (estadoLower.includes("pendiente")) {
+                          badgeBg = "#fef3c7"; // Amarillo / Naranja suave
+                          badgeColor = "#b45309";
+                          dotColor = "#d97706";
+                        }
+
+                        return (
+                          <div
+                            key={`${sol.id}-${index}`}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "12px 0",
+                              borderBottom: "1px solid #f1f5f9",
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "16px",
+                              }}
+                            >
+                              {/* Cuadro indicador del tipo sanguíneo */}
+                              <div
+                                style={{
+                                  width: "48px",
+                                  height: "48px",
+                                  backgroundColor: "#fdf2f2",
+                                  borderRadius: "12px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontWeight: "700",
+                                  color: "#991b1b",
+                                  fontSize: "1rem",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {sol.tipoSangre}
+                              </div>
+
+                              {/* Información principal de la solicitud */}
+                              <div>
+                                <h4
+                                  style={{
+                                    margin: "0 0 2px 0",
+                                    fontSize: "0.95rem",
+                                    color: "#1e293b",
+                                    fontWeight: "600",
+                                  }}
+                                >
+                                  {sol.institucion}
+                                </h4>
+                                <span
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#64748b",
+                                  }}
+                                >
+                                  SOL-{sol.id} · {sol.unidades} unidades
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Etiqueta de Estado con punto indicador */}
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                backgroundColor: badgeBg,
+                                color: badgeColor,
+                                padding: "4px 12px",
+                                borderRadius: "20px",
+                                fontSize: "0.85rem",
+                                fontWeight: "600",
+                                gap: "6px",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: "6px",
+                                  height: "6px",
+                                  borderRadius: "50%",
+                                  backgroundColor: dotColor,
+                                }}
+                              ></span>
+                              {sol.estado}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               )}
@@ -706,37 +894,164 @@ const [solicitudesRecientes, setSolicitudesRecientes] = useState([]);
 
             {/* ACTIVIDAD RECIENTE (TABLA) */}
             <section className="dash-card">
-              <div className="dash-card-header">
-                <div>
-                  <h2 className="dash-card-title">Actividad reciente</h2>
-                  <p className="dash-card-subtitle">
-                    Trazabilidad de operaciones: responsable, fecha, hora y
-                    folio
-                  </p>
-                </div>
-                <a href="#bitacora" className="dash-card-link">
-                  Ver bitácora
-                </a>
-              </div>
-
               {/* CONTENEDOR DE TABLA */}
               <div className="dash-table-blank-body">
-                {/* Encabezados de columnas */}
-                <div className="dash-table-header-row">
-                  <span>Folio</span>
-                  <span>Operación</span>
-                  <span>Responsable</span>
-                  <span>Fecha y hora</span>
-                </div>
-
                 {/* [BACKEND / FRONTEND]: APARTADO PARA FILAS DE BITÁCORA
                   Aquí se mapean las filas de actividad obtenidas de:
                   GET /api/bitacora/reciente */}
-                <div className="dash-table-empty-notice">
-                  <span>
-                    [ESPACIO RESERVADO: Aquí se mapean las filas de la Bitácora
-                    de Actividad Reciente]
-                  </span>
+                <div
+                  className="dash-activity-section"
+                  style={{
+                    backgroundColor: "#ffffff",
+                    borderRadius: "12px",
+                    padding: "24px",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+                    marginTop: "24px",
+                  }}
+                >
+                  {/* Encabezado de la sección */}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      marginBottom: "16px",
+                    }}
+                  >
+                    <div>
+                      <h3
+                        style={{
+                          margin: "0 0 4px 0",
+                          fontSize: "1.1rem",
+                          color: "#1e293b",
+                          fontWeight: "700",
+                        }}
+                      >
+                        Actividad reciente
+                      </h3>
+                      <span style={{ fontSize: "0.85rem", color: "#64748b" }}>
+                        Trazabilidad de operaciones: responsable, fecha, hora y
+                        folio
+                      </span>
+                    </div>
+                    <a
+                      href="#bitacora"
+                      onClick={(e) => {
+                        e.preventDefault(); /* Lógica para navegar a la bitácora completa */
+                      }}
+                      style={{
+                        fontSize: "0.85rem",
+                        color: "#991b1b",
+                        textDecoration: "none",
+                        fontWeight: "600",
+                      }}
+                    >
+                      Ver bitácora
+                    </a>
+                  </div>
+
+                  {/* Tabla de Actividad */}
+                  <div style={{ overflowX: "auto" }}>
+                    <table
+                      style={{
+                        width: "100%",
+                        borderCollapse: "collapse",
+                        textAlign: "left",
+                        fontSize: "0.9rem",
+                      }}
+                    >
+                      <thead>
+                        <tr
+                          style={{
+                            borderBottom: "2px solid #f1f5f9",
+                            color: "#64748b",
+                            fontSize: "0.75rem",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.05em",
+                          }}
+                        >
+                          <th
+                            style={{ padding: "10px 12px", fontWeight: "600" }}
+                          >
+                            Folio
+                          </th>
+                          <th
+                            style={{ padding: "10px 12px", fontWeight: "600" }}
+                          >
+                            Operación
+                          </th>
+                          <th
+                            style={{ padding: "10px 12px", fontWeight: "600" }}
+                          >
+                            Responsable
+                          </th>
+                          <th
+                            style={{ padding: "10px 12px", fontWeight: "600" }}
+                          >
+                            Fecha y hora
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {actividadReciente.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan="4"
+                              style={{
+                                textAlign: "center",
+                                padding: "24px",
+                                color: "#64748b",
+                                fontSize: "0.9rem",
+                              }}
+                            >
+                              No hay actividad reciente registrada.
+                            </td>
+                          </tr>
+                        ) : (
+                          actividadReciente.map((item, index) => (
+                            <tr
+                              key={`${item.id || item.folio}-${index}`}
+                              style={{
+                                borderBottom: "1px solid #f8fafc",
+                                transition: "background 0.2s",
+                              }}
+                            >
+                              <td
+                                style={{
+                                  padding: "12px",
+                                  fontWeight: "600",
+                                  color: "#991b1b",
+                                }}
+                              >
+                                {item.folio}
+                              </td>
+                              <td
+                                style={{
+                                  padding: "12px",
+                                  color: "#1e293b",
+                                  fontWeight: "500",
+                                }}
+                              >
+                                {item.operacion}
+                              </td>
+                              <td style={{ padding: "12px", color: "#64748b" }}>
+                                {item.responsable}
+                              </td>
+                              <td
+                                style={{
+                                  padding: "12px",
+                                  color: "#64748b",
+                                  fontSize: "0.85rem",
+                                }}
+                              >
+                                {item.fechaHora}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </section>
