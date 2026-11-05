@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Login from './modules/login';
 import Dashboard from './modules/dashboard';
 import GestionUsuarios from './modules/usuarios';
+import RegistroUnidades from './modules/registroUnidades';
 
 
 function App() {
@@ -32,6 +33,16 @@ function App() {
     );
   }
 
+  // Módulo: Registro de Unidades (Médico)
+  if (moduloApp === 'registro') {
+    return (
+      <RegistroUnidades
+        usuario={usuario}
+        onCambiarModulo={setModuloApp}
+        onLogout={handleLogout}
+      />
+    );
+  }
 
   // Módulo por defecto: Dashboard
   return (
