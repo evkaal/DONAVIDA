@@ -1,0 +1,37 @@
+/* ESTILOS COMPARTIDOS: ESTRUCTURA MAESTRA DE PÁGINA
+   Garantiza que cualquier módulo tenga las mismas proporciones de pantalla*/
+
+.dona-page-wrapper {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  background-color: #f8fafc;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #1e293b;
+}
+
+.dona-main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.dona-content-body {
+  padding: 2rem 2.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+/* Responsividad general */
+@media (max-width: 991.98px) {
+  .dona-page-wrapper {
+    flex-direction: column;
+  }
+
+  .dona-content-body {
+    padding: 1.25rem 1rem;
+  }
+}

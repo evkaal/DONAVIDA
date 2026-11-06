@@ -2,10 +2,6 @@ import React, { useState } from 'react';
 import './Login.css';
 import { loginUser } from '../../services/authService';
 
-//Endpoint de autenticación sugerido (back):
-//    POST /api/auth/login
-//    Body: { correo, password, rolSeleccionado }
-//    Response: { token, usuario: { nombre, rol, institucion } }
 const ROLES_INGRESO = [
   { id: 3, label: 'Personal médico' },
   { id: 2, label: 'Admin. institución' },
@@ -109,9 +105,7 @@ export default function Login({ onLoginSuccess }) {
             Ingresa con tu cuenta institucional para gestionar el inventario y las solicitudes de sangre.
           </p>
 
-          {/* alarta de credenciales incorrectas aparece 
-              Este mensaje debe activarse cuando el endpoint
-              POST /api/auth/login devuelva un error 401 / credenciales inválidas*/}
+          {/* alarta de credenciales incorrectas aparece*/}
           {errorLogin && (
             <div className="custom-alert-error" role="alert">
               <div className="alert-error-icon">
@@ -124,17 +118,7 @@ export default function Login({ onLoginSuccess }) {
             </div>
           )}
 
-          {loginExitoso && (
-            <div className="custom-alert-success" role="alert">
-              <span>¡Bienvenido(a)! Credenciales correctas. Redirigiendo al sistema...</span>
-            </div>
-          )}
-
-          {/* Seleccionar rol: El rol seleccionado debe enviarse junto con las
-              credenciales para que el backend valide que el usuario tiene
-              permisos para ese rol específico.
-              Endpoint: POST /api/auth/login
-              Body:     { correo, password, rolSeleccionado }*/}
+          {/* Seleccionar rol*/}
           <div className="login-role-selector">
             <span className="login-role-label">Ingresar como</span>
             <div className="login-role-buttons">
