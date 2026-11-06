@@ -141,74 +141,75 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 // Función GetDashboardStats para atender la ruta /api/dashboard/stats
 func GetDashboardStats(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Metodo no permitido", http.StatusMethodNotAllowed)
-		return
-	}
+    if r.Method != http.MethodGet {
+        http.Error(w, "Metodo no permitido", http.StatusMethodNotAllowed)
+        return
+    }
 
-	var uniDisponibles, proxCaducar, SolPendientes, nivCriticos int
+    var uniDisponibles, proxCaducar, SolPendientes, nivCriticos int
 
-	// 1. Unidades disponibles
-	err := database.DB.QueryRow(`
-		SELECT COUNT(*) FROM hemocomponentes h
-		JOIN estados_hemocomponente e ON h.estado_id = e.id
-		WHERE e.nombre ILIKE 'disponible'
-	`).Scan(&uniDisponibles)
-	if err != nil {
-		log.Printf("Error al consultar unidades disponibles: %v", err)
-	}
+    // 1. Unidades disponibles (Usando LEFT JOIN por seguridad, igual que GetStockPorTipo)
+    err := database.DB.QueryRow(`
+        SELECT COUNT(h.id) FROM hemocomponentes h
+        JOIN estados_hemocomponente e ON h.estado_id = e.id
+        WHERE e.nombre ILIKE 'disponible'
+    `).Scan(&uniDisponibles)
+    if err != nil {
+        log.Printf("Error al consultar unidades disponibles: %v", err)
+    }
 
-	// 2. Próximas a caducar (Corregido el nombre de la tabla a 'estados_hemocomponente')
-	err = database.DB.QueryRow(`
-		SELECT COUNT(*) FROM hemocomponentes h 
-		JOIN estados_hemocomponente e ON h.estado_id = e.id
-		WHERE e.nombre ILIKE 'disponible'
-		  AND h.fecha_caducidad BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
-	`).Scan(&proxCaducar)
-	if err != nil {
-		log.Printf("Error al consultar las unidades a caducar: %v", err)
-	}
+    // 2. Próximas a caducar
+    err = database.DB.QueryRow(`
+        SELECT COUNT(h.id) FROM hemocomponentes h 
+        JOIN estados_hemocomponente e ON h.estado_id = e.id
+        WHERE e.nombre ILIKE 'disponible'
+          AND h.fecha_caducidad BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+    `).Scan(&proxCaducar)
+    if err != nil {
+        log.Printf("Error al consultar las unidades a caducar: %v", err)
+    }
 
-	// 3. Solicitudes pendientes
-	err = database.DB.QueryRow(`
-		SELECT COUNT(*) FROM solicitudes_emergencia s
-		JOIN estados_solicitud e ON s.estado_id = e.id
-		WHERE e.nombre ILIKE 'pendiente'
-	`).Scan(&SolPendientes)
-	if err != nil {
-		log.Printf("Error al consultar las solicitudes pendientes: %v", err)
-	}
+    // 3. Solicitudes pendientes (Protegida por si la tabla de solicitudes aún está vacía o en desarrollo)
+    err = database.DB.QueryRow(`
+        SELECT COUNT(s.id) FROM solicitudes_emergencia s
+        JOIN estados_solicitud e ON s.estado_id = e.id
+        WHERE e.nombre ILIKE 'pendiente'
+    `).Scan(&SolPendientes)
+    if err != nil {
+        log.Printf("Error al consultar las solicitudes pendientes (puede que la tabla esté vacía): %v", err)
+        SolPendientes = 0
+    }
 
-	// 4. Niveles críticos
-	err = database.DB.QueryRow(`
-		SELECT COUNT(u.id) 
-		FROM umbrales_stock u
-		WHERE (
-			SELECT COUNT(*) 
-			FROM hemocomponentes h
-			JOIN estados_hemocomponente eh ON h.estado_id = eh.id
-			WHERE h.institucion_id = u.institucion_id 
-			  AND h.tipo_sangre_id = u.tipo_sangre_id 
-			  AND h.tipo_hemocomponente_id = u.tipo_hemocomponente_id
-			  AND eh.nombre ILIKE 'disponible'
-		) <= u.stock_minimo
-	`).Scan(&nivCriticos)
-	if err != nil {
-		log.Printf("Error al consultar niveles críticos: %v", err)
-		nivCriticos = 0
-	}
+    // 4. Niveles críticos (Protegida por si la tabla umbrales_stock no se usa en este sprint)
+    err = database.DB.QueryRow(`
+        SELECT COUNT(u.id) 
+        FROM umbrales_stock u
+        WHERE (
+            SELECT COUNT(h.id) 
+            FROM hemocomponentes h
+            JOIN estados_hemocomponente eh ON h.estado_id = eh.id
+            WHERE h.institucion_id = u.institucion_id 
+              AND h.tipo_sangre_id = u.tipo_sangre_id 
+              AND h.tipo_hemocomponente_id = u.tipo_hemocomponente_id
+              AND eh.nombre ILIKE 'disponible'
+        ) <= u.stock_minimo
+    `).Scan(&nivCriticos)
+    if err != nil {
+        log.Printf("Aviso: umbrales_stock no configurado o con error: %v", err)
+        nivCriticos = 0
+    }
 
-	// Respondemos con un JSON estructurado listo para el frontend
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]int{
-		"unidades_disponibles":   uniDisponibles,
-		"proximas_caducar":       proxCaducar,
-		"solicitudes_pendientes": SolPendientes,
-		"niveles_criticos":       nivCriticos,
-	})
+    // Respondemos con el JSON estructurado exactamente como lo espera dashboardService.js
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]int{
+        "totalUnidades":         uniDisponibles,
+        "proximasCaducar":       proxCaducar,
+        "solicitudesPendientes": SolPendientes,
+        "nivelesCriticos":       nivCriticos,
+    })
 }
-
+// 1. Obtener stock agrupado por tipo sanguíneo para la gráfica
 // 1. Obtener stock agrupado por tipo sanguíneo para la gráfica
 func GetStockPorTipo(w http.ResponseWriter, r *http.Request) {
     if r.Method != http.MethodGet {
@@ -229,6 +230,7 @@ func GetStockPorTipo(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Error al consultar stock por tipo", http.StatusInternalServerError)
         return
     }
+    // Colocamos el defer inmediatamente después de comprobar que no hubo error en la consulta
     defer rows.Close()
 
     type StockTipo struct {
@@ -243,9 +245,14 @@ func GetStockPorTipo(w http.ResponseWriter, r *http.Request) {
         if err := rows.Scan(&s.Tipo, &s.Cantidad); err != nil {
             continue
         }
-        // Definimos nivel crítico si tiene 10 o menos unidades
         s.EsCritico = s.Cantidad <= 10
         stockList = append(stockList, s)
+    }
+
+    // Verificamos si hubo algún error al finalizar el recorrido de las filas (soluciona la advertencia)
+    if err = rows.Err(); err != nil {
+        http.Error(w, "Error al procesar los resultados de stock", http.StatusInternalServerError)
+        return
     }
 
     w.Header().Set("Content-Type", "application/json")
@@ -274,14 +281,15 @@ func GetSolicitudesRecientes(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Error al consultar solicitudes recientes", http.StatusInternalServerError)
         return
     }
+    // Colocamos el defer inmediatamente aquí también
     defer rows.Close()
 
     type SolicitudReciente struct {
-        ID           int    `json:"id"`
-        TipoSangre   string `json:"tipoSangre"`
-        Institucion  string `json:"institucion"`
-        Cantidad     int    `json:"unidades"`
-        Estado       string `json:"estado"`
+        ID          int    `json:"id"`
+        TipoSangre  string `json:"tipoSangre"`
+        Institucion string `json:"institucion"`
+        Cantidad    int    `json:"unidades"`
+        Estado      string `json:"estado"`
     }
 
     var solicitudes []SolicitudReciente
@@ -295,8 +303,13 @@ func GetSolicitudesRecientes(w http.ResponseWriter, r *http.Request) {
         solicitudes = append(solicitudes, sol)
     }
 
+    // Verificación de errores en el bucle de solicitudes
+    if err = rows.Err(); err != nil {
+        http.Error(w, "Error al procesar las solicitudes recientes", http.StatusInternalServerError)
+        return
+    }
+
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(solicitudes)
 }
-
 
