@@ -44,3 +44,8 @@ export const getSolicitudesRecientes = async () => {
     throw error;
   }
 };
+
+
+
+
+
