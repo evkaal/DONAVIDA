@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import './Login.css';
+import { loginUser } from '../../services/authService';
 
 const ROLES_INGRESO = [
-  { id: 'medico', label: 'Personal médico' },
-  { id: 'admin_ins', label: 'Admin. institución' },
-  { id: 'admin_gen', label: 'Admin. general' },
+  { id: 3, label: 'Personal médico' },
+  { id: 2, label: 'Admin. institución' },
+  { id: 1, label: 'Admin. general' },
 ];
 
 export default function Login({ onLoginSuccess }) {
@@ -22,60 +23,43 @@ export default function Login({ onLoginSuccess }) {
   const [errorLogin, setErrorLogin] = useState(false);
   const [loginExitoso, setLoginExitoso] = useState(false);
 
-  // Usuarios de prueba:
-  // - Personal médico:         usuario@institucion.gob.mx  /  password123
-  // - Admin. institución:      admins@institucion.gob.mx   /  adminins123
-  // - Admin. general:          admin@donavida.gob.mx        /  admin123
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorLogin(false);
     setLoginExitoso(false);
     setCargando(true);
 
-    setTimeout(() => {
+    try {
+      // Llamada real al backend en Go usando la capa de servicios de Axios
+      const data = await loginUser({ 
+        email: correo.trim(), 
+        password: password,
+        rol_id: rolSeleccionado 
+      });
+
+      // Si el backend responde con éxito (200 OK)
       setCargando(false);
+      setLoginExitoso(true);
 
-      const correoNorm = correo.trim().toLowerCase();
-      const esMedico = correoNorm === 'usuario@institucion.gob.mx' && password === 'password123';
-      const esAdminIns = correoNorm === 'admins@institucion.gob.mx' && password === 'adminins123';
-      const esAdminGen = correoNorm === 'admin@donavida.gob.mx' && password === 'admin123';
-      const esValido = esMedico || esAdminIns || esAdminGen;
-
-      if (esValido) {
-        setLoginExitoso(true);
-        setErrorLogin(false);
-
-        let datosUsuario;
-        if (esMedico) {
-          datosUsuario = {
-            correo: correo.trim(),
-            rol: 'medico',
-            nombre: 'Personal Médico',
-            institucion: 'Hospital General',
-          };
-        } else if (esAdminIns) {
-          datosUsuario = {
-            correo: correo.trim(),
-            rol: 'admin_ins',
-            nombre: 'Admin. Institución',
-            institucion: 'Hospital General · Administrador',
-          };
-        } else {
-          datosUsuario = {
-            correo: correo.trim(),
-            rol: 'admin_gen',
-            nombre: 'Admin DONAVIDA',
-            institucion: 'Administrador · Sistema',
-          };
-        }
-
-        setTimeout(() => {
-          if (onLoginSuccess) onLoginSuccess(datosUsuario);
-        }, 700);
-      } else {
-        setErrorLogin(true);
+      // Opcional: guardar el token JWT devuelto por Go en localStorage
+      if (data && data.token) {
+        localStorage.setItem('token', data.token);
       }
-    }, 800);
+
+      // Redirigir al dashboard únicamente si el login fue exitoso
+      setTimeout(() => {
+        if (onLoginSuccess) {
+          onLoginSuccess(data)
+        }
+      }, 700);
+
+    } catch (err) {
+      // Si el backend rechaza las credenciales (401 Unauthorized u otro error)
+      setCargando(false);
+      setErrorLogin(true);
+      setLoginExitoso(false);
+      console.error("Error en el login:", err);
+    }
   };
 
   return (
@@ -84,9 +68,7 @@ export default function Login({ onLoginSuccess }) {
       <div className="login-left-panel col-12 col-lg-6">
         <div className="brand-header">
           <div className="brand-logo-placeholder">
-            {
-              <img src="/src/assets/donavida_logo.png" alt="Logo" className="brand-logo-img" />
-            }
+            <img src="/src/assets/donavida_logo.png" alt="Logo" className="brand-logo-img" />
           </div>
         </div>
 
@@ -227,7 +209,6 @@ export default function Login({ onLoginSuccess }) {
               {cargando ? (
                 <>
                   <span className="spinner-wrapper">
-                    {/*ícono o spinner de carga */}
                     <svg className="spinner-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                     </svg>

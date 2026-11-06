@@ -1,0 +1,188 @@
+-- ============================================
+-- 1. CATÁLOGOS INDEPENDIENTES
+-- ============================================
+CREATE TABLE IF NOT EXISTS roles (
+  id serial PRIMARY KEY,
+  nombre varchar(50) UNIQUE NOT NULL,
+  descripcion text
+);
+
+CREATE TABLE IF NOT EXISTS tipos_institucion (
+  id serial PRIMARY KEY,
+  nombre varchar(50) UNIQUE NOT NULL,
+  descripcion text
+);
+
+CREATE TABLE IF NOT EXISTS colonias (
+  id serial PRIMARY KEY,
+  nombre varchar(100) NOT NULL,
+  codigo_postal varchar(5) NOT NULL,
+  UNIQUE (nombre, codigo_postal)
+);
+
+CREATE TABLE IF NOT EXISTS tipos_sangre (
+  id serial PRIMARY KEY,
+  grupo_abo varchar(2) NOT NULL,
+  factor_rh varchar(1) NOT NULL,
+  UNIQUE (grupo_abo, factor_rh)
+);
+
+CREATE TABLE IF NOT EXISTS tipos_hemocomponente (
+  id serial PRIMARY KEY,
+  componente varchar(50) UNIQUE NOT NULL,
+  volumen_ml int,
+  dias_vigencia int
+);
+
+CREATE TABLE IF NOT EXISTS estados_hemocomponente (
+  id serial PRIMARY KEY,
+  nombre varchar(30) UNIQUE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS niveles_prioridad (
+  id serial PRIMARY KEY,
+  nombre varchar(30) UNIQUE NOT NULL,
+  orden int
+);
+
+CREATE TABLE IF NOT EXISTS estados_solicitud (
+  id serial PRIMARY KEY,
+  nombre varchar(30) UNIQUE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS estados_asignacion (
+  id serial PRIMARY KEY,
+  nombre varchar(30) UNIQUE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tipos_alerta (
+  id serial PRIMARY KEY,
+  nombre varchar(50) UNIQUE NOT NULL,
+  descripcion text
+);
+
+CREATE TABLE IF NOT EXISTS acciones_auditoria (
+  id serial PRIMARY KEY,
+  nombre varchar(100) UNIQUE NOT NULL
+);
+
+-- ============================================
+-- 2. INSTITUCIONES Y USUARIOS
+-- ============================================
+CREATE TABLE IF NOT EXISTS instituciones (
+  id serial PRIMARY KEY,
+  nombre varchar(150) NOT NULL,
+  tipo_institucion_id int NOT NULL REFERENCES tipos_institucion(id),
+  colonia_id int NOT NULL REFERENCES colonias(id),
+  calle_numero varchar(200),
+  latitud decimal(9,6),
+  longitud decimal(9,6),
+  telefono varchar(20),
+  activo boolean DEFAULT true
+);
+
+CREATE TABLE IF NOT EXISTS usuarios (
+  id serial PRIMARY KEY,
+  nombre varchar(100) NOT NULL,
+  email varchar(100) UNIQUE NOT NULL,
+  password_hash varchar(255) NOT NULL,
+  rol_id int NOT NULL REFERENCES roles(id),
+  institucion_id int REFERENCES instituciones(id),
+  estado boolean DEFAULT true,
+  created_at timestamp DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================
+-- 3. INVENTARIO (Hemocomponentes y Umbrales)
+-- ============================================
+CREATE TABLE IF NOT EXISTS hemocomponentes (
+  id serial PRIMARY KEY,
+  codigo_unidad varchar(30) UNIQUE NOT NULL,
+  tipo_sangre_id int NOT NULL REFERENCES tipos_sangre(id),
+  tipo_hemocomponente_id int NOT NULL REFERENCES tipos_hemocomponente(id),
+  estado_id int NOT NULL REFERENCES estados_hemocomponente(id),
+  institucion_id int NOT NULL REFERENCES instituciones(id),
+  fecha_extraccion date NOT NULL,
+  fecha_caducidad date NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS umbrales_stock (
+  id serial PRIMARY KEY,
+  institucion_id int NOT NULL REFERENCES instituciones(id),
+  tipo_sangre_id int NOT NULL REFERENCES tipos_sangre(id),
+  tipo_hemocomponente_id int NOT NULL REFERENCES tipos_hemocomponente(id),
+  stock_minimo int NOT NULL,
+  UNIQUE (institucion_id, tipo_sangre_id, tipo_hemocomponente_id)
+);
+
+-- ============================================
+-- 4. SOLICITUDES DE EMERGENCIA (¡Creadas antes de los detalles y asignaciones!)
+-- ============================================
+CREATE TABLE IF NOT EXISTS solicitudes_emergencia (
+  id serial PRIMARY KEY,
+  institucion_solicitante_id int NOT NULL REFERENCES instituciones(id),
+  usuario_solicitante_id int NOT NULL REFERENCES usuarios(id),
+  prioridad_id int NOT NULL REFERENCES niveles_prioridad(id),
+  estado_id int NOT NULL REFERENCES estados_solicitud(id),
+  motivo text,
+  fecha_solicitud timestamp DEFAULT CURRENT_TIMESTAMP,
+  fecha_cierre timestamp
+);
+
+CREATE TABLE IF NOT EXISTS solicitud_detalles (
+  id serial PRIMARY KEY,
+  solicitud_id int NOT NULL REFERENCES solicitudes_emergencia(id) ON DELETE CASCADE,
+  tipo_sangre_id int NOT NULL REFERENCES tipos_sangre(id),
+  tipo_hemocomponente_id int NOT NULL REFERENCES tipos_hemocomponente(id),
+  cantidad int NOT NULL,
+  UNIQUE (solicitud_id, tipo_sangre_id, tipo_hemocomponente_id)
+);
+
+CREATE TABLE IF NOT EXISTS asignaciones_unidades (
+  id serial PRIMARY KEY,
+  solicitud_detalle_id int NOT NULL REFERENCES solicitud_detalles(id) ON DELETE CASCADE,
+  hemocomponente_id int NOT NULL REFERENCES hemocomponentes(id),
+  estado_id int NOT NULL REFERENCES estados_asignacion(id),
+  usuario_responde_id int REFERENCES usuarios(id),
+  fecha_respuesta timestamp,
+  fecha_envio timestamp,
+  fecha_recepcion timestamp,
+  UNIQUE (solicitud_detalle_id, hemocomponente_id)
+);
+
+-- ============================================
+-- 5. ALERTAS Y NOTIFICACIONES
+-- ============================================
+CREATE TABLE IF NOT EXISTS alertas (
+  id serial PRIMARY KEY,
+  tipo_alerta_id int NOT NULL REFERENCES tipos_alerta(id),
+  institucion_id int NOT NULL REFERENCES instituciones(id),
+  hemocomponente_id int REFERENCES hemocomponentes(id),
+  solicitud_id int REFERENCES solicitudes_emergencia(id),
+  tipo_sangre_id int REFERENCES tipos_sangre(id),
+  tipo_hemocomponente_id int REFERENCES tipos_hemocomponente(id),
+  mensaje text NOT NULL,
+  resuelta boolean DEFAULT false,
+  created_at timestamp DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS notificaciones (
+  id serial PRIMARY KEY,
+  alerta_id int NOT NULL REFERENCES alertas(id) ON DELETE CASCADE,
+  usuario_id int NOT NULL REFERENCES usuarios(id),
+  leida boolean DEFAULT false,
+  fecha_lectura timestamp,
+  UNIQUE (alerta_id, usuario_id)
+);
+
+-- ============================================
+-- 6. AUDITORÍA
+-- ============================================
+CREATE TABLE IF NOT EXISTS auditoria_logs (
+  id serial PRIMARY KEY,
+  usuario_id int REFERENCES usuarios(id),
+  accion_id int NOT NULL REFERENCES acciones_auditoria(id),
+  detalles text,
+  ip_address varchar(45),
+  created_at timestamp DEFAULT CURRENT_TIMESTAMP
+);
