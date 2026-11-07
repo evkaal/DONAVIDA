@@ -313,3 +313,104 @@ func GetSolicitudesRecientes(w http.ResponseWriter, r *http.Request) {
     json.NewEncoder(w).Encode(solicitudes)
 }
 
+
+
+
+
+// RegistrarUnidad atiende la ruta POST /api/unidades
+type UnidadInput struct {
+	Codigo           string `json:"codigo"`
+	TipoSangre       string `json:"tipoSangre"`       // Ej: "O+"
+	Hemocomponente   string `json:"hemocomponente"`   // Ej: "Concentrado eritrocitario"
+	Volumen          string `json:"volumen"`
+	FechaExtraccion  string `json:"fechaExtraccion"`
+	FechaCaducidad   string `json:"fechaCaducidad"`
+	Estado           string `json:"estado"`           // "Disponible"
+	InstitucionID    int    `json:"institucion_id"`
+}
+
+// RegistrarUnidad atiende la ruta POST /api/unidades
+// RegistrarUnidad atiende la ruta POST /api/unidades
+func RegistrarUnidad(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var input UnidadInput
+	err := json.NewDecoder(r.Body).Decode(&input)
+	if err != nil {
+		http.Error(w, "Error al leer los datos de la unidad", http.StatusBadRequest)
+		return
+	}
+
+	// 1. Obtener el ID del tipo de sangre (separando grupo ABO y factor Rh)
+	var tipoSangreID int
+	var grupoBO, factorRh string
+	if len(input.TipoSangre) >= 2 {
+		grupoBO = input.TipoSangre[:len(input.TipoSangre)-1]
+		factorRh = input.TipoSangre[len(input.TipoSangre)-1:]
+	} else {
+		grupoBO = input.TipoSangre
+		factorRh = "+"
+	}
+
+	err = database.DB.QueryRow(`
+		SELECT id FROM tipos_sangre WHERE grupo_abo = $1 AND factor_rh = $2
+	`, grupoBO, factorRh).Scan(&tipoSangreID)
+	if err != nil {
+		log.Printf("Error buscando tipo_sangre (%s, %s): %v", grupoBO, factorRh, err)
+		http.Error(w, "Tipo sanguíneo no válido en la base de datos", http.StatusBadRequest)
+		return
+	}
+
+	// 2. Obtener el ID del tipo de hemocomponente dinámicamente por su nombre
+	var tipoHemocomponenteID int
+	err = database.DB.QueryRow(`
+		SELECT id FROM tipos_hemocomponente WHERE nombre ILIKE $1
+	`, input.Hemocomponente).Scan(&tipoHemocomponenteID)
+	if err != nil {
+		tipoHemocomponenteID = 1 
+	}
+
+	// 3. Obtener el ID del estado (ej. "Disponible")
+	var estadoID int
+	err = database.DB.QueryRow(`
+		SELECT id FROM estados_hemocomponente WHERE nombre ILIKE $1
+	`, input.Estado).Scan(&estadoID)
+	if err != nil {
+		estadoID = 1 
+	}
+
+	// 4. Insertar en la tabla hemocomponentes (sin el campo volumen que no existe en la BD)
+	query := `
+		INSERT INTO hemocomponentes 
+		(codigo_unidad, tipo_sangre_id, tipo_hemocomponente_id, estado_id, institucion_id, fecha_extraccion, fecha_caducidad)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id
+	`
+	var nuevoID int
+	err = database.DB.QueryRow(
+		query,
+		input.Codigo,
+		tipoSangreID,
+		tipoHemocomponenteID,
+		estadoID,
+		input.InstitucionID,
+		input.FechaExtraccion,
+		input.FechaCaducidad,
+	).Scan(&nuevoID)
+
+	if err != nil {
+		log.Printf("Error al insertar unidad en BD: %v", err)
+		http.Error(w, "Error al registrar la unidad en la base de datos: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"mensaje": "Unidad registrada con éxito en la BD",
+		"id":      nuevoID,
+	})
+}
