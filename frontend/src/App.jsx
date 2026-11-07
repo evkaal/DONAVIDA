@@ -3,7 +3,7 @@ import Login from './modules/login';
 import Dashboard from './modules/dashboard';
 import GestionUsuarios from './modules/usuarios';
 import RegistroUnidades from './modules/registroUnidades';
-
+import StockInventario from './modules/stockInventario';
 
 function App() {
   // Estado para el usuario autenticado
@@ -37,6 +37,17 @@ function App() {
   if (moduloApp === 'registro') {
     return (
       <RegistroUnidades
+        usuario={usuario}
+        onCambiarModulo={setModuloApp}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // Módulo: Stock de Inventario (Médico y Admin)
+  if (moduloApp === 'stock') {
+    return (
+      <StockInventario
         usuario={usuario}
         onCambiarModulo={setModuloApp}
         onLogout={handleLogout}
