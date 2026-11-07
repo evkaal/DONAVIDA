@@ -40,7 +40,7 @@ func main() {
    mux.HandleFunc("/api/dashboard/stats", handlers.GetDashboardStats)
    mux.HandleFunc("/api/dashboard/stock-tipos", handlers.GetStockPorTipo)
    mux.HandleFunc("/api/solicitudes/recientes", handlers.GetSolicitudesRecientes)
-   
+   mux.HandleFunc("/api/unidades", handlers.RegistrarUnidad)
 
 	// Ruta de prueba
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

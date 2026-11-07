@@ -14,27 +14,28 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
   // LISTA DE UNIDADES REGISTRADAS
   // [BACKEND] Reemplazar con datos obtenidos de GET /api/unidades
   const [unidades, setUnidades] = useState([]);
-
-  const handleGuardarUnidad = (nuevaUnidad) => {
+const handleGuardarUnidad = (nuevaUnidad) => {
     const unidadFormateada = {
-      folio: nuevaUnidad.codigo,
-      tipo: nuevaUnidad.tipoSangre,
-      hemocomponente: nuevaUnidad.hemocomponente,
-      fechaIngreso: nuevaUnidad.fechaExtraccion,
-      caducidad: nuevaUnidad.fechaCaducidad,
+      folio: nuevaUnidad.codigo || nuevaUnidad.folio || 'N/D',
+      tipo: nuevaUnidad.tipoSangre || nuevaUnidad.tipo || 'O+',
+      hemocomponente: nuevaUnidad.hemocomponente || 'Concentrado eritrocitario',
+      fechaIngreso: nuevaUnidad.fechaExtraccion || nuevaUnidad.fechaIngreso || '',
+      caducidad: nuevaUnidad.fechaCaducidad || nuevaUnidad.caducidad || '',
       estado: nuevaUnidad.estado || 'Disponible',
     };
     setUnidades((prev) => [unidadFormateada, ...prev]);
   };
-
-  const unidadesFiltradas = unidades.filter((u) => {
-    const coincideFolio = u.folio.toLowerCase().includes(busquedaFolio.toLowerCase());
+ const unidadesFiltradas = unidades.filter((u) => {
+    // Verificamos si existe folio o código de forma segura
+    const folioTexto = u.folio || u.codigo || '';
+    const coincideFolio = folioTexto.toLowerCase().includes(busquedaFolio.toLowerCase());
+    
     const coincideTipo = filtroTipo === 'todos' || u.tipo === filtroTipo;
     const coincideHemo = filtroHemo === 'todos' || u.hemocomponente === filtroHemo;
-    const coincideEstado = filtroEstado === 'todos' || u.estado.toLowerCase() === filtroEstado.toLowerCase();
+    const coincideEstado = filtroEstado === 'todos' || (u.estado && u.estado.toLowerCase() === filtroEstado.toLowerCase());
+    
     return coincideFolio && coincideTipo && coincideHemo && coincideEstado;
   });
-
   return (
     <div className="dona-page-wrapper">
       <Sidebar

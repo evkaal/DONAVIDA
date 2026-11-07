@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import './ModalRegistroUnidad.css';
+import { registrarUnidad } from '../../services/unidadesService';
 
 // Catálogo de hemocomponentes con su vigencia y volumen por defecto
 const HEMOCOMPONENTES_CATALOGO = {
@@ -22,6 +23,7 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
   const [vigenciaDias, setVigenciaDias] = useState(42);
   const [fechaExtraccion, setFechaExtraccion] = useState('2026-10-21');
   const [fechaCaducidad, setFechaCaducidad] = useState('2026-12-02');
+  const [cargando, setCargando] = useState(false);
 
   // Actualizar vigencia y volumen sugerido al cambiar el hemocomponente
   const handleCambioHemocomponente = (nuevoHemo) => {
@@ -47,11 +49,13 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e, guardarOtro = false) => {
+  const handleSubmit = async (e, guardarOtro = false) => {
     e.preventDefault();
+    setCargando(true);
 
     const nuevaUnidad = {
       codigo: codigo.trim(),
+      institucion_id: usuario?.institucion_id || 1,
       institucion: institucionDefecto,
       tipoSangre,
       hemocomponente,
@@ -62,20 +66,25 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
       estado: 'Disponible',
     };
 
-    // [BACKEND] Aquí se llama al servicio: await api.post('/unidades', nuevaUnidad);
-    console.log('[BACKEND] POST /api/unidades:', nuevaUnidad);
+    try {
+      const resultado = await registrarUnidad(nuevaUnidad);
 
-    if (onSaveSuccess) {
-      onSaveSuccess(nuevaUnidad);
-    }
+      if (onSaveSuccess) {
+        onSaveSuccess(resultado);
+      }
 
-    if (guardarOtro) {
-      // Limpiar y generar un siguiente código sugerido
-      const match = codigo.match(/\d+/);
-      const siguienteNumero = match ? parseInt(match[0], 10) + 1 : 2033;
-      setCodigo(`UN-${siguienteNumero}`);
-    } else {
-      onClose();
+      if (guardarOtro) {
+        const match = codigo.match(/\d+/);
+        const siguienteNumero = match ? parseInt(match[0], 10) + 1 : 2033;
+        setCodigo(`UN-${siguienteNumero}`);
+      } else {
+        onClose();
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Hubo un error al registrar la unidad en la base de datos.");
+    } finally {
+      setCargando(false);
     }
   };
 
@@ -258,7 +267,7 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
           </div>
 
           <footer className="mreg-u-footer">
-            <button type="button" className="btn-mreg-cancel" onClick={onClose}>
+            <button type="button" className="btn-mreg-cancel" onClick={onClose} disabled={cargando}>
               Cancelar
             </button>
 
@@ -266,18 +275,19 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
               type="button"
               className="btn-mreg-secondary"
               onClick={(e) => handleSubmit(e, true)}
+              disabled={cargando}
             >
               <span className="mreg-action-icon">
                 <img src="/src/assets/iconos_gestionU/agregar.png" alt="" />
               </span>
-              <span>Guardar y agregar otra</span>
+              <span>{cargando ? 'Guardando...' : 'Guardar y agregar otra'}</span>
             </button>
 
-            <button type="submit" className="btn-mreg-primary">
+            <button type="submit" className="btn-mreg-primary" disabled={cargando}>
               <span className="mreg-action-icon">
                 <img src="/src/assets/iconos_gestionU/aceptar.png" alt="" />
               </span>
-              <span>Registrar unidad</span>
+              <span>{cargando ? 'Registrando...' : 'Registrar unidad'}</span>
             </button>
           </footer>
         </form>
@@ -285,4 +295,3 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
     </div>
   );
 }
-
