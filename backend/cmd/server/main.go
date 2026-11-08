@@ -5,6 +5,7 @@ import (
 	"donavida-backend/internal/handlers"
 	"fmt"
 	"net/http"
+        "log"
 )
 
 // Middleware para habilitar CORS y permitir peticiones desde React (Vite)
@@ -34,7 +35,16 @@ func main() {
 	mux.HandleFunc("/api/register", handlers.Register)
 	mux.HandleFunc("/api/login", handlers.Login)
 	//Registo de unidades
-	mux.HandleFunc("/api/unidades", handlers.RegistrarUnidad)
+	mux.HandleFunc("/api/unidades", func(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		handlers.ListarUnidades(w, r)
+	case http.MethodPost:
+		handlers.RegistrarUnidad(w, r)
+	default:
+		http.Error(w, "método no permitido", http.StatusMethodNotAllowed)
+	}
+     })
 
 	// Ruta de prueba
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +57,6 @@ func main() {
     })
 
 	fmt.Println("Servidor corriendo en el puerto 8080")
-
+        log.Fatal(http.ListenAndServe(":8080", enableCORS(mux)))
 	// Pasamos el enrutador (mux) a través de nuestro middleware de CORS y lo levantamos
-	http.ListenAndServe(":8080", enableCORS(mux))
 }

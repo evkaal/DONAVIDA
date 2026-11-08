@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './RegistroUnidades.css';
 import ModalRegistroUnidad from './ModalRegistroUnidad';
 import { Sidebar, Navbar } from '../../components/layout';
+import { getHemocomponentes } from '../../services/hemocomponentesService';
 
 export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -13,8 +14,44 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
 
   // LISTA DE UNIDADES REGISTRADAS
   // [BACKEND] Reemplazar con datos obtenidos de GET /api/unidades
+  // ESTADOS DE PAGINACIÓN Y UNIDADES CONECTADOS AL BACKEND
   const [unidades, setUnidades] = useState([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [loading, setLoading] = useState(false);
 
+
+  // CONSULTAR EL BACKEND  CADA VEZ QUE CAMBIE LA BÚSQUEDA O LA PÁGINA
+  useEffect(() => {
+    fetchUnidades();
+  }, [busquedaFolio, page]);
+
+  const fetchUnidades = async () => {
+    setLoading(true);
+    try {
+      const response = await getHemocomponentes(busquedaFolio, page, 10);
+      if (response) {
+        // Mapear los nombres de la BD (PostgreSQL) a los campos de la UI
+        const unidadesMapeadas = (response.data || []).map((u) => ({
+          folio: u.codigo_unidad || u.folio,
+          tipo: u.tipo_sangre || u.tipo,
+          hemocomponente: u.tipo_hemocomponente || u.hemocomponente,
+          fechaIngreso: u.fecha_extraccion || u.fechaIngreso || '2026-11-06',
+          caducidad: u.fecha_caducidad || u.caducidad,
+          estado: u.estado || 'Disponible',
+        }));
+        setUnidades(unidadesMapeadas);
+        setTotalPages(response.meta?.total_pages || 1);
+        setTotalRecords(response.meta?.total_records || unidadesMapeadas.length);
+      }
+    } catch (error) {
+      console.error("Error al cargar unidades:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   const handleGuardarUnidad = (nuevaUnidad) => {
     const unidadFormateada = {
       folio: nuevaUnidad.codigo,
