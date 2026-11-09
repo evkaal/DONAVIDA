@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import './StockInventario.css';
 import { Sidebar, Navbar } from '../../components/layout';
+import ModalConfigurarAlertas from './ModalConfigurarAlertas';
 
 export default function StockInventario({ usuario, onCambiarModulo, onLogout }) {
+  // Estado del modal de configuración de alertas y mínimos
+  const [isModalAlertasOpen, setIsModalAlertasOpen] = useState(false);
   // Hospital seleccionado en el filtro
   const [hospitalSeleccionado, setHospitalSeleccionado] = useState('Hospital General');
 
@@ -106,10 +109,7 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
               <button
                 type="button"
                 className="stock-btn-config"
-                onClick={() => {
-                  /* Conectar con modal (FALTA POR HACER)*/
-                  alert('Configuración de umbrales mínimos (Modal en desarrollo / Conexión backend)');
-                }}
+                onClick={() => setIsModalAlertasOpen(true)}
               >
                 <span className="stock-action-icon">
                   <img src="/src/assets/iconos_stockU/ajustes.png" alt="Icono de configuración" />
@@ -421,6 +421,17 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
           </section>
         </main>
       </div>
+
+      {/* MODAL CONFIGURAR ALERTAS / MÍNIMOS */}
+      <ModalConfigurarAlertas
+        isOpen={isModalAlertasOpen}
+        onClose={() => setIsModalAlertasOpen(false)}
+        hospital={hospitalSeleccionado}
+        usuario={usuario}
+        onGuardar={(config) => {
+          console.log('[STOCK] Nueva configuración de alertas guardada:', config);
+        }}
+      />
     </div>
   );
 }
