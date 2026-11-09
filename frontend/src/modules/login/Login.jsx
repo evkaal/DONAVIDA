@@ -3,9 +3,9 @@ import './Login.css';
 import { loginUser } from '../../services/authService';
 
 const ROLES_INGRESO = [
-  { id: 'medico', label: 'Personal médico' },
-  { id: 'admin_ins', label: 'Admin. institución' },
-  { id: 'admin_gen', label: 'Admin. general' },
+  { id: 3, label: 'Personal médico' },
+  { id: 2, label: 'Admin. institución' },
+  { id: 1, label: 'Admin. general' },
 ];
 
 export default function Login({ onLoginSuccess }) {
@@ -15,7 +15,7 @@ export default function Login({ onLoginSuccess }) {
   const [recordarme, setRecordarme] = useState(false);
 
   // Estado del rol seleccionado
-  const [rolSeleccionado, setRolSeleccionado] = useState('medico');
+  const [rolSeleccionado, setRolSeleccionado] = useState('3');
 
   // Estados de interfaz
   const [mostrarPassword, setMostrarPassword] = useState(false);
@@ -23,8 +23,6 @@ export default function Login({ onLoginSuccess }) {
   const [errorLogin, setErrorLogin] = useState(false);
   const [loginExitoso, setLoginExitoso] = useState(false);
 
-
-  // Función manejadora del envío del formulario conectada al Backend en Go
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorLogin(false);
@@ -35,7 +33,8 @@ export default function Login({ onLoginSuccess }) {
       // Llamada real al backend en Go usando la capa de servicios de Axios
       const data = await loginUser({ 
         email: correo.trim(), 
-        password: password 
+        password: password,
+        rol_id: rolSeleccionado 
       });
 
       // Si el backend responde con éxito (200 OK)
@@ -50,7 +49,7 @@ export default function Login({ onLoginSuccess }) {
       // Redirigir al dashboard únicamente si el login fue exitoso
       setTimeout(() => {
         if (onLoginSuccess) {
-          onLoginSuccess(correo.trim());
+          onLoginSuccess(data)
         }
       }, 700);
 

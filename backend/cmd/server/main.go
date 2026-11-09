@@ -4,8 +4,8 @@ import (
 	"donavida-backend/internal/database"
 	"donavida-backend/internal/handlers"
 	"fmt"
+	"log"
 	"net/http"
-        "log"
 )
 
 // Middleware para habilitar CORS y permitir peticiones desde React (Vite)
@@ -34,29 +34,37 @@ func main() {
 	// Rutas de autenticación
 	mux.HandleFunc("/api/register", handlers.Register)
 	mux.HandleFunc("/api/login", handlers.Login)
+
+	//Dashboard
+	mux.HandleFunc("/api/dashboard/stats", handlers.GetDashboardStats)
+	mux.HandleFunc("/api/dashboard/stock-tipos", handlers.GetStockPorTipo)
+	mux.HandleFunc("/api/solicitudes/recientes", handlers.GetSolicitudesRecientes)
+
 	//Registo de unidades
 	mux.HandleFunc("/api/unidades", func(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		handlers.ListarUnidades(w, r)
-	case http.MethodPost:
-		handlers.RegistrarUnidad(w, r)
-	default:
-		http.Error(w, "método no permitido", http.StatusMethodNotAllowed)
-	}
-     })
+		switch r.Method {
+		case http.MethodGet:
+			handlers.ListarUnidades(w, r)
+		case http.MethodPost:
+			handlers.RegistrarUnidad(w, r)
+		default:
+			http.Error(w, "método no permitido", http.StatusMethodNotAllowed)
+		}
+	})
+	//http.HandleFunc("/api/register", handlers.HabilitarCORS(handlers.Register))
+	//http.HandleFunc("/api/login", handlers.HabilitarCORS(handlers.Login))
 
 	// Ruta de prueba
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        // Manejar 404 si no es la ruta exactísima '/'
-        if r.URL.Path != "/" {
-            http.NotFound(w, r)
-            return
-        }
-        w.Write([]byte("Bienvenido al back"))
-    })
+		// Manejar 404 si no es la ruta exactísima '/'
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write([]byte("Bienvenido al back"))
+	})
 
 	fmt.Println("Servidor corriendo en el puerto 8080")
-        log.Fatal(http.ListenAndServe(":8080", enableCORS(mux)))
+	log.Fatal(http.ListenAndServe(":8080", enableCORS(mux)))
 	// Pasamos el enrutador (mux) a través de nuestro middleware de CORS y lo levantamos
 }

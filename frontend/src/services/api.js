@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8080/api/v1', // URL base de tu backend en Go
+  baseURL: 'http://localhost:8080/api', // URL base de tu backend en Go
   headers: {
     'Content-Type': 'application/json',
   },

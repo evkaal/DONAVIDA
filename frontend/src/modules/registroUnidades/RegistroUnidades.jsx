@@ -4,6 +4,8 @@ import ModalRegistroUnidad from './ModalRegistroUnidad';
 import { Sidebar, Navbar } from '../../components/layout';
 import { getHemocomponentes } from '../../services/hemocomponentesService';
 
+const POR_PAGINA=10;
+
 export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -23,27 +25,29 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
 
 
   // CONSULTAR EL BACKEND  CADA VEZ QUE CAMBIE LA BÚSQUEDA O LA PÁGINA
-  useEffect(() => {
-    fetchUnidades();
-  }, [busquedaFolio, page]);
+
 
   const fetchUnidades = async () => {
     setLoading(true);
     try {
-      const response = await getHemocomponentes(busquedaFolio, page, 10);
+      const response = await getHemocomponentes(busquedaFolio, page, POR_PAGINA,{
+        tipo: filtroTipo,
+        hemocomponente: filtroHemo,
+        estado: filtroEstado,
+      });
       if (response) {
         // Mapear los nombres de la BD (PostgreSQL) a los campos de la UI
-        const unidadesMapeadas = (response.data || []).map((u) => ({
-          folio: u.codigo_unidad || u.folio,
-          tipo: u.tipo_sangre || u.tipo,
-          hemocomponente: u.tipo_hemocomponente || u.hemocomponente,
-          fechaIngreso: u.fecha_extraccion || u.fechaIngreso || '2026-11-06',
-          caducidad: u.fecha_caducidad || u.caducidad,
+        const mapeadas = (response.data || []).map((u) => ({
+          folio: u.codigo_unidad,
+          tipo: u.tipo_sangre,
+          hemocomponente: u.tipo_hemocomponente,
+          fechaIngreso: u.fecha_extraccion,
+          caducidad: u.fecha_caducidad,
           estado: u.estado || 'Disponible',
         }));
-        setUnidades(unidadesMapeadas);
+        setUnidades(mapeadas);
         setTotalPages(response.meta?.total_pages || 1);
-        setTotalRecords(response.meta?.total_records || unidadesMapeadas.length);
+        setTotalRecords(response.meta?.total_records ?? mapeadas.length);
       }
     } catch (error) {
       console.error("Error al cargar unidades:", error);
@@ -51,32 +55,22 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
       setLoading(false);
     }
   };
-  
-  const handleGuardarUnidad = (nuevaUnidad) => {
-    const unidadFormateada = {
-      folio: nuevaUnidad.codigo,
-      tipo: nuevaUnidad.tipoSangre,
-      hemocomponente: nuevaUnidad.hemocomponente,
-      fechaIngreso: nuevaUnidad.fechaExtraccion,
-      caducidad: nuevaUnidad.fechaCaducidad,
-      estado: nuevaUnidad.estado || 'Disponible',
-    };
-    setUnidades((prev) => [unidadFormateada, ...prev]);
+
+  useEffect(() => {
+    fetchUnidades();
+  }, [busquedaFolio, filtroTipo, filtroHemo, filtroEstado, page]);
+
+// Al cambiar búsqueda o un filtro, se regresa a la página 1
+  const cambiarFiltro = (setter) => (e) => {
+    setter(e.target.value);
+    setPage(1);
   };
 
-  const unidadesFiltradas = unidades.filter((u) => {
-    const folio = u?.folio || '';
-    const tipo = u?.tipo || '';
-    const hemocomponente = u?.hemocomponente || '';
-    const estado = u?.estado || '';
-
-    const coincideFolio = folio.toLowerCase().includes(busquedaFolio.toLowerCase());
-    const coincideTipo = filtroTipo === 'todos' || tipo === filtroTipo;
-    const coincideHemo = filtroHemo === 'todos' || hemocomponente === filtroHemo;
-    const coincideEstado = filtroEstado === 'todos' || estado.toLowerCase() === filtroEstado.toLowerCase();
-    
-    return coincideFolio && coincideTipo && coincideHemo && coincideEstado;
-  });
+  // Después de guardar, se recarga desde el servidor
+  const handleGuardarUnidad = () => {
+    if (page !== 1) setPage(1);
+    else fetchUnidades();
+  };
 
   return (
     <div className="dona-page-wrapper">
@@ -128,13 +122,13 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
                   className="reg-search-input"
                   placeholder="Buscar por folio..."
                   value={busquedaFolio}
-                  onChange={(e) => setBusquedaFolio(e.target.value)}
+                  onChange={cambiarFiltro(setBusquedaFolio)}
                 />
               </div>
 
               <div className="reg-selects-group">
                 <div className="reg-custom-select-wrapper">
-                  <select className="reg-filter-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
+                  <select className="reg-filter-select" value={filtroTipo} onChange={cambiarFiltro(setFiltroTipo)}>
                     <option value="todos">Tipo sanguíneo</option>
                     <option value="A+">A+</option>
                     <option value="A-">A-</option>
@@ -148,18 +142,18 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
                 </div>
 
                 <div className="reg-custom-select-wrapper">
-                  <select className="reg-filter-select" value={filtroHemo} onChange={(e) => setFiltroHemo(e.target.value)}>
+                  <select className="reg-filter-select" value={filtroHemo} onChange={cambiarFiltro(setFiltroHemo)}>
                     <option value="todos">Hemocomponente</option>
                     <option value="Concentrado eritrocitario">Concentrado eritrocitario</option>
                     <option value="Sangre total">Sangre total</option>
                     <option value="Plaquetas">Plaquetas</option>
-                    <option value="Plasma fresco">Plasma fresco</option>
+                    <option value="Plasma fresco congelado">Plasma fresco congelado</option>
                     <option value="Crioprecipitado">Crioprecipitado</option>
                   </select>
                 </div>
 
                 <div className="reg-custom-select-wrapper">
-                  <select className="reg-filter-select" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
+                  <select className="reg-filter-select" value={filtroEstado} onChange={cambiarFiltro(setFiltroEstado)}>
                     <option value="todos">Estado</option>
                     <option value="disponible">Disponible</option>
                     <option value="entregada">Entregada</option>
@@ -186,8 +180,8 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
                   </tr>
                 </thead>
                 <tbody>
-                  {unidadesFiltradas.length > 0 ? (
-                    unidadesFiltradas.map((u, idx) => (
+                  {unidades.length > 0 ? (
+                    unidades.map((u, idx) => (
                       <tr key={u.folio || idx} className="reg-table-row">
                         <td className="cell-folio">{u.folio}</td>
                         <td>
@@ -231,11 +225,25 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
 
             {/* Pie de tabla / Paginación */}
             <div className="reg-pagination-footer">
-              <span>Mostrando {unidadesFiltradas.length} de {unidades.length} unidades</span>
+              <span>Mostrando {unidades.length} de {totalRecords} unidades · Página {page} de {totalPages}</span>
               <div className="reg-pagination-controls">
-                <button type="button" className="reg-pagination-btn" disabled>‹</button>
-                <button type="button" className="reg-pagination-btn active">1</button>
-                <button type="button" className="reg-pagination-btn" disabled>›</button>
+                <button 
+                  type="button" 
+                  className="reg-pagination-btn" 
+                  disabled={page <= 1 || loading}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  ,
+                </button>
+                <button type="button" className="reg-pagination-btn active">{page}</button>
+                <button 
+                  type="button" 
+                  className="reg-pagination-btn" 
+                  disabled={page >= totalPages || loading}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  ,
+                </button>
               </div>
             </div>
           </section>
