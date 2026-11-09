@@ -28,16 +28,10 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
   };
 
   const unidadesFiltradas = unidades.filter((u) => {
-    const folio = u?.folio || '';
-    const tipo = u?.tipo || '';
-    const hemocomponente = u?.hemocomponente || '';
-    const estado = u?.estado || '';
-
-    const coincideFolio = folio.toLowerCase().includes(busquedaFolio.toLowerCase());
-    const coincideTipo = filtroTipo === 'todos' || tipo === filtroTipo;
-    const coincideHemo = filtroHemo === 'todos' || hemocomponente === filtroHemo;
-    const coincideEstado = filtroEstado === 'todos' || estado.toLowerCase() === filtroEstado.toLowerCase();
-    
+    const coincideFolio = u.folio.toLowerCase().includes(busquedaFolio.toLowerCase());
+    const coincideTipo = filtroTipo === 'todos' || u.tipo === filtroTipo;
+    const coincideHemo = filtroHemo === 'todos' || u.hemocomponente === filtroHemo;
+    const coincideEstado = filtroEstado === 'todos' || u.estado.toLowerCase() === filtroEstado.toLowerCase();
     return coincideFolio && coincideTipo && coincideHemo && coincideEstado;
   });
 

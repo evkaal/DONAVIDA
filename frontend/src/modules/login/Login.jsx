@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import './Login.css';
-import { loginUser } from '../../services/authService';
 
 const ROLES_INGRESO = [
   { id: 'medico', label: 'Personal médico' },
@@ -23,43 +22,63 @@ export default function Login({ onLoginSuccess }) {
   const [errorLogin, setErrorLogin] = useState(false);
   const [loginExitoso, setLoginExitoso] = useState(false);
 
-
-  // Función manejadora del envío del formulario conectada al Backend en Go
+  // Usuarios de prueba:
+  // - Personal médico:         usuario@institucion.gob.mx  /  password123
+  // - Admin. institución:      admins@institucion.gob.mx   /  adminins123
+  // - Admin. general:          admin@donavida.gob.mx        /  admin123
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorLogin(false);
     setLoginExitoso(false);
     setCargando(true);
 
+    // Mapear el rol seleccionado en la interfaz al ID numérico que espera tu BD/Backend
+    // (Asumiendo: 1 o medico = Personal médico, 2 = Admin institución, 3 = Admin general)
+    let rolIdNum = 1;
+    if (rolSeleccionado === 'admin_ins') rolIdNum = 2;
+    if (rolSeleccionado === 'admin_gen') rolIdNum = 3;
+
     try {
-      // Llamada real al backend en Go usando la capa de servicios de Axios
-      const data = await loginUser({ 
-        email: correo.trim(), 
-        password: password 
+      const response = await fetch('http://localhost:8080/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: correo.trim(),
+          password: password,
+          rol_id: rolIdNum,
+        }),
       });
 
-      // Si el backend responde con éxito (200 OK)
       setCargando(false);
-      setLoginExitoso(true);
 
-      // Opcional: guardar el token JWT devuelto por Go en localStorage
-      if (data && data.token) {
-        localStorage.setItem('token', data.token);
+      if (!response.ok) {
+        // Si el backend regresa un error (401 Unauthorized, etc.)
+        setErrorLogin(true);
+        return;
       }
 
-      // Redirigir al dashboard únicamente si el login fue exitoso
+      const data = await response.json();
+      setLoginExitoso(true);
+
+      // Estructura de usuario que recibe tu aplicación principal tras el éxito
+      const datosUsuario = {
+        correo: data.email || correo.trim(),
+        rol: rolSeleccionado,
+        nombre: data.nombre || 'Usuario DONAVIDA',
+        institucion: 'Hospital General',
+        token: data.token,
+      };
+
       setTimeout(() => {
-        if (onLoginSuccess) {
-          onLoginSuccess(correo.trim());
-        }
+        if (onLoginSuccess) onLoginSuccess(datosUsuario);
       }, 700);
 
-    } catch (err) {
-      // Si el backend rechaza las credenciales (401 Unauthorized u otro error)
+    } catch (error) {
+      console.error("Error de red al conectar con el backend:", error);
       setCargando(false);
       setErrorLogin(true);
-      setLoginExitoso(false);
-      console.error("Error en el login:", err);
     }
   };
 
@@ -69,7 +88,9 @@ export default function Login({ onLoginSuccess }) {
       <div className="login-left-panel col-12 col-lg-6">
         <div className="brand-header">
           <div className="brand-logo-placeholder">
-            <img src="/src/assets/donavida_logo.png" alt="Logo" className="brand-logo-img" />
+            {
+              <img src="/src/assets/donavida_logo.png" alt="Logo" className="brand-logo-img" />
+            }
           </div>
         </div>
 
@@ -210,6 +231,7 @@ export default function Login({ onLoginSuccess }) {
               {cargando ? (
                 <>
                   <span className="spinner-wrapper">
+                    {/*ícono o spinner de carga */}
                     <svg className="spinner-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                     </svg>

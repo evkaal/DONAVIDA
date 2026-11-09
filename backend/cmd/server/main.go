@@ -5,6 +5,7 @@ import (
 	"donavida-backend/internal/handlers"
 	"fmt"
 	"net/http"
+	
 )
 
 // Middleware para habilitar CORS y permitir peticiones desde React (Vite)
@@ -31,20 +32,32 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Rutas de autenticación
-	mux.HandleFunc("/api/register", handlers.Register)
-	mux.HandleFunc("/api/login", handlers.Login)
-	//Registo de unidades
-	mux.HandleFunc("/api/unidades", handlers.RegistrarUnidad)
+	//http.HandleFunc("/api/register", handlers.HabilitarCORS(handlers.Register))
+	//http.HandleFunc("/api/login", handlers.HabilitarCORS(handlers.Login))
+
+   mux.HandleFunc("/api/register", handlers.Register)
+    mux.HandleFunc("/api/login", handlers.Login)
+   mux.HandleFunc("/api/dashboard/stats", handlers.GetDashboardStats)
+   mux.HandleFunc("/api/dashboard/stock-tipos", handlers.GetStockPorTipo)
+   mux.HandleFunc("/api/solicitudes/recientes", handlers.GetSolicitudesRecientes)
+   mux.HandleFunc("/api/unidades", handlers.RegistrarUnidad)
+   // Nuevas rutas para el módulo Stock de inventario
+	mux.HandleFunc("/api/inventario/matriz", handlers.GetMatrizInventario)
+	mux.HandleFunc("/api/inventario/alertas", handlers.GetAlertasStock)
+    // Nuevas rutas extras para el módulo de inventario
+	mux.HandleFunc("/api/stock/kpis", handlers.GetStockKpis)
+	mux.HandleFunc("/api/stock/matriz", handlers.GetMatrizInventario)
+	mux.HandleFunc("/api/stock/alertas", handlers.GetAlertasStock)
+	mux.HandleFunc("/api/stock/proximas-caducar", handlers.GetProximasCaducar)
+    // Funcion para obtener la lista de hospitales
+    mux.HandleFunc("/api/instituciones", handlers.GetInstituciones)
+
+
 
 	// Ruta de prueba
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        // Manejar 404 si no es la ruta exactísima '/'
-        if r.URL.Path != "/" {
-            http.NotFound(w, r)
-            return
-        }
-        w.Write([]byte("Bienvenido al back"))
-    })
+		w.Write([]byte("Bienvenido al back"))
+	})
 
 	fmt.Println("Servidor corriendo en el puerto 8080")
 
