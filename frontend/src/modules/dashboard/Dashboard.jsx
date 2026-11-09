@@ -15,26 +15,31 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
   const [stats, setStats] = useState({
     totalUnidades: 0,
     solicitudesPendientes: 0,
+    proximasCaducar: 0,
+    nivelesCriticos: 0,
+    totalUsuarios: 0,
   });
   const [cargando, setCargando] = useState(true);
   const [actividadReciente] = useState([]);
 
   // - 'medico': Ve módulos de gestión clínica (Registro, Solicitudes, Stock, etc.)
   // - 'admin': Ve módulos estratégicos (Stock, Histórico y Gestión de usuarios)
+  // Detección automática por ID de rol (1: Admin general, 2: Admin institución, 3: Personal médico)
+  const rolId = Number(usuario?.rol_id ?? (usuario?.rol === 'admin_gen' ? 1 : usuario?.rol === 'admin_ins' ? 2 : 3));
   const esAdmin =
+    rolId === 1 ||
     usuario?.rol === "admin" ||
+    usuario?.rol === "admin_gen" ||
     (typeof usuario === "string" && usuario.includes("admin"));
   const rol = esAdmin ? "admin" : "medico";
   const nombreUsuario =
-    usuario?.nombre || (esAdmin ? "Admin DONAVIDA" : "Personal Médico");
+    usuario?.nombre || (rolId === 1 ? "Admin General" : rolId === 2 ? "Admin Institución" : "Personal Médico");
   const institucionUsuario =
     usuario?.institucion ||
-    (esAdmin ? "Administrador · Sistema" : "Hospital General");
-  const avatarIniciales = esAdmin
-    ? "AD"
-    : usuario?.correo
-      ? usuario.correo.substring(0, 2).toUpperCase()
-      : "PM";
+    (rolId === 1 ? "Administrador · Sistema" : "Hospital General");
+  const avatarIniciales = usuario?.nombre
+    ? usuario.nombre.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+    : esAdmin ? "AD" : "PM";
 
   useEffect(() => {
     const cargarDatosDashboard = async () => {
@@ -170,7 +175,7 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                       </div>
                     </div>
                     <div className="dash-kpi-value-area">
-                      <h3 className="dash-kpi-number">0</h3>
+                      <h3 className="dash-kpi-number">{stats.proximasCaducar ?? 0}</h3>
                     </div>
                     <div className="dash-kpi-footer">
                       <span className="dash-kpi-subtext-muted">
@@ -193,7 +198,7 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                       </div>
                     </div>
                     <div className="dash-kpi-value-area">
-                      <h3 className="dash-kpi-number">0</h3>
+                      <h3 className="dash-kpi-number">{stats.nivelesCriticos ?? 0}</h3>
                     </div>
                     <div className="dash-kpi-footer">
                       <span className="dash-kpi-subtext-muted">
@@ -216,7 +221,7 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                       </div>
                     </div>
                     <div className="dash-kpi-value-area">
-                      <h3 className="dash-kpi-number">0</h3>
+                      <h3 className="dash-kpi-number">{stats.totalUsuarios ?? 0}</h3>
                     </div>
                     <div className="dash-kpi-footer">
                       <span className="dash-kpi-subtext-muted">
@@ -265,7 +270,7 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                       </div>
                     </div>
                     <div className="dash-kpi-value-area">
-                      <h3 className="dash-kpi-number">0</h3>
+                      <h3 className="dash-kpi-number">{stats.proximasCaducar ?? 0}</h3>
                     </div>
                     <div className="dash-kpi-footer">
                       <span className="dash-kpi-subtext-muted">
@@ -311,7 +316,7 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                       </div>
                     </div>
                     <div className="dash-kpi-value-area">
-                      <h3 className="dash-kpi-number">0</h3>
+                      <h3 className="dash-kpi-number">{stats.nivelesCriticos ?? 0}</h3>
                     </div>
                     <div className="dash-kpi-footer">
                       <span className="dash-kpi-subtext-muted">

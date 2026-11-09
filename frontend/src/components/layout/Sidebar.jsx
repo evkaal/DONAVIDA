@@ -2,11 +2,12 @@ import React from 'react';
 import './Sidebar.css';
 
 export default function Sidebar({ usuario, moduloActivo = 'dashboard', onCambiarModulo, onLogout }) {
-  // Roles posibles: 'medico' | 'admin_ins' | 'admin_gen'
+  // Roles posibles: 1 = 'admin_gen' | 2 = 'admin_ins' | 3 = 'medico'
   const rol = usuario?.rol ?? '';
-  const esAdminGen = rol === 'admin_gen';
-  const esAdminIns = rol === 'admin_ins';
-  const esAdminCual = esAdminGen || esAdminIns;  // cualquier tipo de admin
+  const rolId = Number(usuario?.rol_id ?? (rol === 'admin_gen' ? 1 : rol === 'admin_ins' ? 2 : 3));
+  const esAdminGen = rolId === 1 || rol === 'admin_gen';
+  const esAdminIns = rolId === 2 || rol === 'admin_ins';
+  const esAdminCual = esAdminGen || esAdminIns || rol === 'admin';  // cualquier tipo de admin
 
   // Admin institución ve TODOS los módulos (médico + administración)
   // Admin general ve solo Dashboard, Stock, Histórico + administración

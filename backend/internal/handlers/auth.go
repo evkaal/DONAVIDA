@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"donavida-backend/internal/database"
 	"encoding/json"
 	"fmt"
@@ -20,7 +21,7 @@ var jwtKey = []byte(getJWTSecret())
 func getJWTSecret() string {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		log.Fatal("Fatal: la variable de entorno JWT_Secret no esta definida")
+		secret = "donavida_secret_key_jwt_2026"
 	}
 	return secret
 }
@@ -86,30 +87,36 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("verificado login -> Email: '%s', RolID enviado: %d\n", input.Email, input.RolID)
+	fmt.Printf("Intento de login para email: '%s'\n", input.Email)
 
-	// 1. Buscar el usuario en la base de datos por su email y rol
+	// 1. Buscar el usuario en la base de datos únicamente por su email (detección automática de rol)
 	var storedHash string
 	var nombreUsuario string
 	var rolID int
+	var institucionID sql.NullInt64
+	var institucionNombre sql.NullString
 
-	query := `SELECT nombre, password_hash, rol_id FROM usuarios WHERE email = $1 AND rol_id = $2`
-	err = database.DB.QueryRow(query, input.Email, input.RolID).Scan(&nombreUsuario, &storedHash, &rolID)
+	query := `
+		SELECT u.nombre, u.password_hash, u.rol_id, u.institucion_id, i.nombre
+		FROM usuarios u
+		LEFT JOIN instituciones i ON u.institucion_id = i.id
+		WHERE u.email = $1
+	`
+	err = database.DB.QueryRow(query, input.Email).Scan(&nombreUsuario, &storedHash, &rolID, &institucionID, &institucionNombre)
 
 	if err != nil {
-		http.Error(w, "Correo, contraseña o rol incorrecto", http.StatusUnauthorized)
+		http.Error(w, "Correo o contraseña incorrectos", http.StatusUnauthorized)
 		return
 	}
-	fmt.Printf("Intentando login para: %s con contraseña ingresada: %s\n", input.Email, input.Password)
 
 	// 2. Comparar la contraseña
 	err = bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(input.Password))
 	if err != nil {
-		http.Error(w, "Correo, contraseña o rol incorrecto", http.StatusUnauthorized)
+		http.Error(w, "Correo o contraseña incorrectos", http.StatusUnauthorized)
 		return
 	}
 
-	// 3. Generar el Token JWT
+	// 3. Generar el Token JWT con el rolID detectado automáticamente
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := claims{
 		Email: input.Email,
@@ -128,15 +135,45 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Mapeo amigable de rol según rol_id (1: Admin general, 2: Admin institución, 3: Personal médico)
+	var rolStr string
+	switch rolID {
+	case 1:
+		rolStr = "admin_gen"
+	case 2:
+		rolStr = "admin_ins"
+	case 3:
+		rolStr = "medico"
+	default:
+		rolStr = "medico"
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"mensaje": "Login exitoso",
-		"token":   tokenString,
-		"nombre":  nombreUsuario,
-		"email":   input.Email,
-		"rol_id":  rolID,
+		"mensaje":        "Login exitoso",
+		"token":          tokenString,
+		"nombre":         nombreUsuario,
+		"email":          input.Email,
+		"correo":         input.Email,
+		"rol_id":         rolID,
+		"rol":            rolStr,
+		"institucion_id": institucionID.Int64,
+		"institucion":    institucionNombre.String,
 	})
+}
+
+// actualizarEstadosCaducados actualiza a 'Caducado' las unidades cuya fecha de caducidad ya pasó
+func actualizarEstadosCaducados() {
+	_, err := database.DB.Exec(`
+		UPDATE hemocomponentes
+		SET estado_id = (SELECT id FROM estados_hemocomponente WHERE nombre ILIKE 'caducado' LIMIT 1)
+		WHERE fecha_caducidad < CURRENT_DATE
+		  AND estado_id = (SELECT id FROM estados_hemocomponente WHERE nombre ILIKE 'disponible' LIMIT 1)
+	`)
+	if err != nil {
+		log.Printf("Aviso al actualizar unidades caducadas: %v", err)
+	}
 }
 
 // Función GetDashboardStats para atender la ruta /api/dashboard/stats
@@ -146,19 +183,22 @@ func GetDashboardStats(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    var uniDisponibles, proxCaducar, SolPendientes, nivCriticos int
+    // Actualizamos automáticamente las unidades vencidas
+    actualizarEstadosCaducados()
 
-    // 1. Unidades disponibles (Usando LEFT JOIN por seguridad, igual que GetStockPorTipo)
+    var uniDisponibles, proxCaducar, SolPendientes, nivCriticos, totalUsuarios int
+
+    // 1. Unidades disponibles (únicamente no caducadas)
     err := database.DB.QueryRow(`
         SELECT COUNT(h.id) FROM hemocomponentes h
         JOIN estados_hemocomponente e ON h.estado_id = e.id
-        WHERE e.nombre ILIKE 'disponible'
+        WHERE e.nombre ILIKE 'disponible' AND h.fecha_caducidad >= CURRENT_DATE
     `).Scan(&uniDisponibles)
     if err != nil {
         log.Printf("Error al consultar unidades disponibles: %v", err)
     }
 
-    // 2. Próximas a caducar
+    // 2. Próximas a caducar (dentro de los próximos 7 días a partir de hoy)
     err = database.DB.QueryRow(`
         SELECT COUNT(h.id) FROM hemocomponentes h 
         JOIN estados_hemocomponente e ON h.estado_id = e.id
@@ -169,37 +209,61 @@ func GetDashboardStats(w http.ResponseWriter, r *http.Request) {
         log.Printf("Error al consultar las unidades a caducar: %v", err)
     }
 
-    // 3. Solicitudes pendientes (Protegida por si la tabla de solicitudes aún está vacía o en desarrollo)
+    // 3. Solicitudes pendientes
     err = database.DB.QueryRow(`
         SELECT COUNT(s.id) FROM solicitudes_emergencia s
         JOIN estados_solicitud e ON s.estado_id = e.id
         WHERE e.nombre ILIKE 'pendiente'
     `).Scan(&SolPendientes)
     if err != nil {
-        log.Printf("Error al consultar las solicitudes pendientes (puede que la tabla esté vacía): %v", err)
+        log.Printf("Error al consultar las solicitudes pendientes: %v", err)
         SolPendientes = 0
     }
 
-    // 4. Niveles críticos (Protegida por si la tabla umbrales_stock no se usa en este sprint)
-    err = database.DB.QueryRow(`
-        SELECT COUNT(u.id) 
-        FROM umbrales_stock u
-        WHERE (
-            SELECT COUNT(h.id) 
-            FROM hemocomponentes h
-            JOIN estados_hemocomponente eh ON h.estado_id = eh.id
-            WHERE h.institucion_id = u.institucion_id 
-              AND h.tipo_sangre_id = u.tipo_sangre_id 
-              AND h.tipo_hemocomponente_id = u.tipo_hemocomponente_id
-              AND eh.nombre ILIKE 'disponible'
-        ) <= u.stock_minimo
-    `).Scan(&nivCriticos)
-    if err != nil {
-        log.Printf("Aviso: umbrales_stock no configurado o con error: %v", err)
-        nivCriticos = 0
+    // 4. Niveles críticos: verificar umbrales de stock
+    var countUmbrales int
+    _ = database.DB.QueryRow(`SELECT COUNT(*) FROM umbrales_stock`).Scan(&countUmbrales)
+
+    if countUmbrales > 0 {
+        err = database.DB.QueryRow(`
+            SELECT COUNT(u.id) 
+            FROM umbrales_stock u
+            WHERE (
+                SELECT COUNT(h.id) 
+                FROM hemocomponentes h
+                JOIN estados_hemocomponente eh ON h.estado_id = eh.id
+                WHERE h.institucion_id = u.institucion_id 
+                  AND h.tipo_sangre_id = u.tipo_sangre_id 
+                  AND h.tipo_hemocomponente_id = u.tipo_hemocomponente_id
+                  AND eh.nombre ILIKE 'disponible'
+                  AND h.fecha_caducidad >= CURRENT_DATE
+            ) <= u.stock_minimo
+        `).Scan(&nivCriticos)
+        if err != nil {
+            log.Printf("Aviso: umbrales_stock con error: %v", err)
+            nivCriticos = 0
+        }
+    } else {
+        // Fallback: si no hay umbrales_stock, contamos tipos sanguíneos con stock disponible <= 10
+        _ = database.DB.QueryRow(`
+            SELECT COUNT(*) FROM (
+                SELECT ts.id
+                FROM tipos_sangre ts
+                LEFT JOIN hemocomponentes h ON ts.id = h.tipo_sangre_id AND h.fecha_caducidad >= CURRENT_DATE
+                LEFT JOIN estados_hemocomponente eh ON h.estado_id = eh.id AND eh.nombre ILIKE 'disponible'
+                GROUP BY ts.id
+                HAVING COUNT(eh.id) <= 10
+            ) c
+        `).Scan(&nivCriticos)
     }
 
-    // Respondemos con el JSON estructurado exactamente como lo espera dashboardService.js
+    // 5. Total de usuarios registrados (para rol Administrador)
+    err = database.DB.QueryRow(`SELECT COUNT(id) FROM usuarios`).Scan(&totalUsuarios)
+    if err != nil {
+        totalUsuarios = 0
+    }
+
+    // Respondemos con el JSON estructurado para el dashboard
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusOK)
     json.NewEncoder(w).Encode(map[string]int{
@@ -207,9 +271,9 @@ func GetDashboardStats(w http.ResponseWriter, r *http.Request) {
         "proximasCaducar":       proxCaducar,
         "solicitudesPendientes": SolPendientes,
         "nivelesCriticos":       nivCriticos,
+        "totalUsuarios":         totalUsuarios,
     })
 }
-// 1. Obtener stock agrupado por tipo sanguíneo para la gráfica
 // 1. Obtener stock agrupado por tipo sanguíneo para la gráfica
 func GetStockPorTipo(w http.ResponseWriter, r *http.Request) {
     if r.Method != http.MethodGet {
@@ -217,11 +281,13 @@ func GetStockPorTipo(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    actualizarEstadosCaducados()
+
     rows, err := database.DB.Query(`
         SELECT ts.grupo_abo || ts.factor_rh AS tipo, 
-               COUNT(h.id) AS cantidad
+               COUNT(eh.id) AS cantidad
         FROM tipos_sangre ts
-        LEFT JOIN hemocomponentes h ON ts.id = h.tipo_sangre_id 
+        LEFT JOIN hemocomponentes h ON ts.id = h.tipo_sangre_id AND h.fecha_caducidad >= CURRENT_DATE
         LEFT JOIN estados_hemocomponente eh ON h.estado_id = eh.id AND eh.nombre ILIKE 'disponible'
         GROUP BY ts.grupo_abo, ts.factor_rh
         ORDER BY tipo;
@@ -317,7 +383,7 @@ func GetSolicitudesRecientes(w http.ResponseWriter, r *http.Request) {
 
 
 
-// RegistrarUnidad atiende la ruta POST /api/unidades
+// RegistrarUnidad atiende la ruta /api/unidades (GET para listar, POST para registrar)
 type UnidadInput struct {
 	Codigo           string `json:"codigo"`
 	TipoSangre       string `json:"tipoSangre"`       // Ej: "O+"
@@ -329,9 +395,62 @@ type UnidadInput struct {
 	InstitucionID    int    `json:"institucion_id"`
 }
 
-// RegistrarUnidad atiende la ruta POST /api/unidades
-// RegistrarUnidad atiende la ruta POST /api/unidades
+// GetUnidades atiende GET /api/unidades devolviendo la lista de hemocomponentes registrados
+func GetUnidades(w http.ResponseWriter, r *http.Request) {
+	actualizarEstadosCaducados()
+
+	rows, err := database.DB.Query(`
+		SELECT h.id, h.codigo_unidad, 
+		       ts.grupo_abo || ts.factor_rh AS tipo_sangre,
+		       th.componente AS hemocomponente,
+		       to_char(h.fecha_extraccion, 'YYYY-MM-DD') AS fecha_extraccion,
+		       to_char(h.fecha_caducidad, 'YYYY-MM-DD') AS fecha_caducidad,
+		       eh.nombre AS estado
+		FROM hemocomponentes h
+		JOIN tipos_sangre ts ON h.tipo_sangre_id = ts.id
+		JOIN tipos_hemocomponente th ON h.tipo_hemocomponente_id = th.id
+		JOIN estados_hemocomponente eh ON h.estado_id = eh.id
+		ORDER BY h.id DESC
+	`)
+	if err != nil {
+		log.Printf("Error al consultar unidades: %v", err)
+		http.Error(w, "Error al consultar unidades", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type UnidadItem struct {
+		ID           int    `json:"id"`
+		Folio        string `json:"folio"`
+		Tipo         string `json:"tipo"`
+		Hemocomponente string `json:"hemocomponente"`
+		FechaIngreso string `json:"fechaIngreso"`
+		Caducidad    string `json:"caducidad"`
+		Estado       string `json:"estado"`
+	}
+
+	var lista []UnidadItem
+	for rows.Next() {
+		var u UnidadItem
+		if err := rows.Scan(&u.ID, &u.Folio, &u.Tipo, &u.Hemocomponente, &u.FechaIngreso, &u.Caducidad, &u.Estado); err != nil {
+			continue
+		}
+		lista = append(lista, u)
+	}
+
+	if lista == nil {
+		lista = []UnidadItem{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(lista)
+}
+
 func RegistrarUnidad(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		GetUnidades(w, r)
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
 		return
@@ -364,20 +483,35 @@ func RegistrarUnidad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Obtener el ID del tipo de hemocomponente dinámicamente por su nombre
+	// 2. Obtener el ID del tipo de hemocomponente dinámicamente por la columna componente
 	var tipoHemocomponenteID int
 	err = database.DB.QueryRow(`
-		SELECT id FROM tipos_hemocomponente WHERE nombre ILIKE $1
+		SELECT id FROM tipos_hemocomponente 
+		WHERE componente ILIKE '%' || $1 || '%' OR $1 ILIKE '%' || componente || '%' 
+		LIMIT 1
 	`, input.Hemocomponente).Scan(&tipoHemocomponenteID)
 	if err != nil {
 		tipoHemocomponenteID = 1 
 	}
 
-	// 3. Obtener el ID del estado (ej. "Disponible")
+	// 3. Obtener el ID del estado: Si la fecha de caducidad ya pasó, asignar "Caducado" automáticamente
+	estadoNombre := input.Estado
+	if input.FechaCaducidad != "" {
+		if tCad, parseErr := time.Parse("2006-01-02", input.FechaCaducidad); parseErr == nil {
+			hoy := time.Now().Truncate(24 * time.Hour)
+			if tCad.Before(hoy) {
+				estadoNombre = "Caducado"
+			}
+		}
+	}
+	if estadoNombre == "" {
+		estadoNombre = "Disponible"
+	}
+
 	var estadoID int
 	err = database.DB.QueryRow(`
-		SELECT id FROM estados_hemocomponente WHERE nombre ILIKE $1
-	`, input.Estado).Scan(&estadoID)
+		SELECT id FROM estados_hemocomponente WHERE nombre ILIKE $1 LIMIT 1
+	`, estadoNombre).Scan(&estadoID)
 	if err != nil {
 		estadoID = 1 
 	}

@@ -2,20 +2,11 @@ import React, { useState } from 'react';
 import './Login.css';
 import { loginUser } from '../../services/authService';
 
-const ROLES_INGRESO = [
-  { id: 3, label: 'Personal médico' },
-  { id: 2, label: 'Admin. institución' },
-  { id: 1, label: 'Admin. general' },
-];
-
 export default function Login({ onLoginSuccess }) {
   // Estados del formulario
   const [correo, setCorreo] = useState('');
   const [password, setPassword] = useState('');
   const [recordarme, setRecordarme] = useState(false);
-
-  // Estado del rol seleccionado
-  const [rolSeleccionado, setRolSeleccionado] = useState('medico');
 
   // Estados de interfaz
   const [mostrarPassword, setMostrarPassword] = useState(false);
@@ -30,18 +21,17 @@ export default function Login({ onLoginSuccess }) {
     setCargando(true);
 
     try {
-      // Llamada real al backend en Go usando la capa de servicios de Axios
+      // Llamada al backend en Go: el sistema detecta automáticamente el rol del usuario (ID 1, 2 o 3)
       const data = await loginUser({ 
         email: correo.trim(), 
-        password: password,
-        rol_id: rolSeleccionado 
+        password: password
       });
 
       // Si el backend responde con éxito (200 OK)
       setCargando(false);
       setLoginExitoso(true);
 
-      // Opcional: guardar el token JWT devuelto por Go en localStorage
+      // Guardar el token JWT devuelto por Go en localStorage
       if (data && data.token) {
         localStorage.setItem('token', data.token);
       }
@@ -49,9 +39,9 @@ export default function Login({ onLoginSuccess }) {
       // Redirigir al dashboard únicamente si el login fue exitoso
       setTimeout(() => {
         if (onLoginSuccess) {
-          onLoginSuccess(data)
+          onLoginSuccess(data);
         }
-      }, 700);
+      }, 500);
 
     } catch (err) {
       // Si el backend rechaza las credenciales (401 Unauthorized u otro error)
@@ -117,23 +107,6 @@ export default function Login({ onLoginSuccess }) {
               </div>
             </div>
           )}
-
-          {/* Seleccionar rol*/}
-          <div className="login-role-selector">
-            <span className="login-role-label">Ingresar como</span>
-            <div className="login-role-buttons">
-              {ROLES_INGRESO.map((rol) => (
-                <button
-                  key={rol.id}
-                  type="button"
-                  className={`login-role-btn ${rolSeleccionado === rol.id ? 'active' : ''}`}
-                  onClick={() => setRolSeleccionado(rol.id)}
-                >
-                  {rol.label}
-                </button>
-              ))}
-            </div>
-          </div>
 
           {/* Formulario */}
           <form onSubmit={handleSubmit}>

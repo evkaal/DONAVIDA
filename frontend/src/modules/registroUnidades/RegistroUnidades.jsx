@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './RegistroUnidades.css';
 import ModalRegistroUnidad from './ModalRegistroUnidad';
 import { Sidebar, Navbar } from '../../components/layout';
+import { getUnidades } from '../../services/unidadesService';
 
 export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -12,10 +13,49 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
   const [filtroEstado, setFiltroEstado] = useState('todos');
 
   // LISTA DE UNIDADES REGISTRADAS
-  // [BACKEND] Reemplazar con datos obtenidos de GET /api/unidades
   const [unidades, setUnidades] = useState([]);
-const handleGuardarUnidad = (nuevaUnidad) => {
+
+  useEffect(() => {
+    const cargarUnidades = async () => {
+      try {
+        const data = await getUnidades();
+        if (Array.isArray(data)) {
+          setUnidades(data);
+        }
+      } catch (err) {
+        console.error("Error al cargar unidades desde la BD:", err);
+      }
+    };
+    cargarUnidades();
+  }, []);
+
+  const esCaducado = (caducidadStr) => {
+    if (!caducidadStr) return false;
+    const cleanDate = caducidadStr.split('T')[0];
+    const [y, m, d] = cleanDate.split('-').map(Number);
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaCad = new Date(y, m - 1, d);
+    fechaCad.setHours(0, 0, 0, 0);
+    return fechaCad < hoy;
+  };
+
+  const esPorCaducar = (caducidadStr) => {
+    if (!caducidadStr) return false;
+    const cleanDate = caducidadStr.split('T')[0];
+    const [y, m, d] = cleanDate.split('-').map(Number);
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaCad = new Date(y, m - 1, d);
+    fechaCad.setHours(0, 0, 0, 0);
+    const diffTime = fechaCad.getTime() - hoy.getTime();
+    const diffDias = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDias >= 0 && diffDias <= 7;
+  };
+
+  const handleGuardarUnidad = (nuevaUnidad) => {
     const unidadFormateada = {
+      id: nuevaUnidad.id,
       folio: nuevaUnidad.codigo || nuevaUnidad.folio || 'N/D',
       tipo: nuevaUnidad.tipoSangre || nuevaUnidad.tipo || 'O+',
       hemocomponente: nuevaUnidad.hemocomponente || 'Concentrado eritrocitario',
@@ -25,14 +65,30 @@ const handleGuardarUnidad = (nuevaUnidad) => {
     };
     setUnidades((prev) => [unidadFormateada, ...prev]);
   };
- const unidadesFiltradas = unidades.filter((u) => {
+
+  const unidadesFiltradas = unidades.filter((u) => {
     // Verificamos si existe folio o código de forma segura
     const folioTexto = u.folio || u.codigo || '';
     const coincideFolio = folioTexto.toLowerCase().includes(busquedaFolio.toLowerCase());
     
     const coincideTipo = filtroTipo === 'todos' || u.tipo === filtroTipo;
     const coincideHemo = filtroHemo === 'todos' || u.hemocomponente === filtroHemo;
-    const coincideEstado = filtroEstado === 'todos' || (u.estado && u.estado.toLowerCase() === filtroEstado.toLowerCase());
+
+    const estaCaducado = esCaducado(u.caducidad) || u.estado?.toLowerCase() === 'caducado';
+    const estaPorCaducar = !estaCaducado && esPorCaducar(u.caducidad) && u.estado?.toLowerCase() === 'disponible';
+
+    let coincideEstado = false;
+    if (filtroEstado === 'todos') {
+      coincideEstado = true;
+    } else if (filtroEstado === 'caducado') {
+      coincideEstado = estaCaducado;
+    } else if (filtroEstado === 'por caducar') {
+      coincideEstado = estaPorCaducar;
+    } else if (filtroEstado === 'disponible') {
+      coincideEstado = !estaCaducado && !estaPorCaducar && u.estado?.toLowerCase() === 'disponible';
+    } else {
+      coincideEstado = u.estado && u.estado.toLowerCase() === filtroEstado.toLowerCase();
+    }
     
     return coincideFolio && coincideTipo && coincideHemo && coincideEstado;
   });
@@ -120,9 +176,10 @@ const handleGuardarUnidad = (nuevaUnidad) => {
                   <select className="reg-filter-select" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
                     <option value="todos">Estado</option>
                     <option value="disponible">Disponible</option>
-                    <option value="entregada">Entregada</option>
                     <option value="por caducar">Por caducar</option>
+                    <option value="caducado">Caducado</option>
                     <option value="reservada">Reservada</option>
+                    <option value="entregada">Entregada</option>
                   </select>
                 </div>
               </div>
@@ -157,10 +214,28 @@ const handleGuardarUnidad = (nuevaUnidad) => {
                         <td className="cell-date">{u.fechaIngreso}</td>
                         <td className="cell-date">{u.caducidad}</td>
                         <td>
-                          <span className={`status-badge status-${u.estado?.toLowerCase().replace(/\s+/g, '-')}`}>
-                            <span className="status-dot"></span>
-                            {u.estado}
-                          </span>
+                          {(() => {
+                            const estaCaducado = esCaducado(u.caducidad) || u.estado?.toLowerCase() === 'caducado';
+                            const estaPorCaducar = !estaCaducado && esPorCaducar(u.caducidad) && u.estado?.toLowerCase() === 'disponible';
+
+                            let estadoTexto = u.estado || 'Disponible';
+                            let estadoClase = u.estado?.toLowerCase().replace(/\s+/g, '-') || 'disponible';
+
+                            if (estaCaducado) {
+                              estadoTexto = 'Caducado';
+                              estadoClase = 'caducado';
+                            } else if (estaPorCaducar) {
+                              estadoTexto = 'Por caducar';
+                              estadoClase = 'por-caducar';
+                            }
+
+                            return (
+                              <span className={`status-badge status-${estadoClase}`}>
+                                <span className="status-dot"></span>
+                                {estadoTexto}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="cell-actions">
                           <button type="button" className="btn-row-menu" title="Acciones">

@@ -275,6 +275,17 @@
   background-color: #2563eb;
 }
 
+.status-caducado,
+.status-caducada {
+  background-color: #fef2f2;
+  color: #991b1b;
+}
+
+.status-caducado .status-dot,
+.status-caducada .status-dot {
+  background-color: #dc2626;
+}
+
 .btn-row-menu {
   background: none;
   border: none;

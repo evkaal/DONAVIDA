@@ -13,16 +13,34 @@ const HEMOCOMPONENTES_CATALOGO = {
 
 const TIPOS_SANGUINEOS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
+// Helper para formatear fecha local a YYYY-MM-DD sin desfase horario
+const formatearFechaISO = (fecha) => {
+  const yyyy = fecha.getFullYear();
+  const mm = String(fecha.getMonth() + 1).padStart(2, '0');
+  const dd = String(fecha.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const calcularFechaCaducidad = (fechaBaseStr, dias) => {
+  if (!fechaBaseStr) return '';
+  const [y, m, d] = fechaBaseStr.split('-').map(Number);
+  const fecha = new Date(y, m - 1, d);
+  fecha.setDate(fecha.getDate() + Number(dias));
+  return formatearFechaISO(fecha);
+};
+
 export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, usuario }) {
   // 1. Estados locales del formulario
   const institucionDefecto = usuario?.institucion || 'Hospital General';
+  const fechaHoy = formatearFechaISO(new Date());
+
   const [codigo, setCodigo] = useState('UN-2032');
   const [tipoSangre, setTipoSangre] = useState('O+');
   const [hemocomponente, setHemocomponente] = useState('Concentrado eritrocitario');
   const [volumen, setVolumen] = useState('300 ml');
   const [vigenciaDias, setVigenciaDias] = useState(42);
-  const [fechaExtraccion, setFechaExtraccion] = useState('2026-10-21');
-  const [fechaCaducidad, setFechaCaducidad] = useState('2026-12-02');
+  const [fechaExtraccion, setFechaExtraccion] = useState(fechaHoy);
+  const [fechaCaducidad, setFechaCaducidad] = useState(() => calcularFechaCaducidad(fechaHoy, 42));
   const [cargando, setCargando] = useState(false);
 
   // Actualizar vigencia y volumen sugerido al cambiar el hemocomponente
@@ -35,15 +53,15 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
 
       // Recalcular fecha de caducidad si hay fecha de extracción válida
       if (fechaExtraccion) {
-        const fecha = new Date(fechaExtraccion);
-        if (!isNaN(fecha.getTime())) {
-          fecha.setDate(fecha.getDate() + config.vigenciaDias);
-          const yyyy = fecha.getFullYear();
-          const mm = String(fecha.getMonth() + 1).padStart(2, '0');
-          const dd = String(fecha.getDate()).padStart(2, '0');
-          setFechaCaducidad(`${yyyy}-${mm}-${dd}`);
-        }
+        setFechaCaducidad(calcularFechaCaducidad(fechaExtraccion, config.vigenciaDias));
       }
+    }
+  };
+
+  const handleCambioFechaExtraccion = (nuevaFecha) => {
+    setFechaExtraccion(nuevaFecha);
+    if (nuevaFecha) {
+      setFechaCaducidad(calcularFechaCaducidad(nuevaFecha, vigenciaDias));
     }
   };
 
@@ -52,6 +70,9 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
   const handleSubmit = async (e, guardarOtro = false) => {
     e.preventDefault();
     setCargando(true);
+
+    const esCaducada = Boolean(fechaCaducidad && fechaCaducidad < fechaHoy);
+    const estadoFinal = esCaducada ? 'Caducado' : 'Disponible';
 
     const nuevaUnidad = {
       codigo: codigo.trim(),
@@ -63,14 +84,14 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
       vigenciaDias,
       fechaExtraccion,
       fechaCaducidad,
-      estado: 'Disponible',
+      estado: estadoFinal,
     };
 
     try {
       const resultado = await registrarUnidad(nuevaUnidad);
 
       if (onSaveSuccess) {
-        onSaveSuccess(resultado);
+        onSaveSuccess({ ...nuevaUnidad, id: resultado?.id });
       }
 
       if (guardarOtro) {
@@ -241,7 +262,7 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
                     type="date"
                     className="mreg-u-input"
                     value={fechaExtraccion}
-                    onChange={(e) => setFechaExtraccion(e.target.value)}
+                    onChange={(e) => handleCambioFechaExtraccion(e.target.value)}
                     required
                   />
                 </div>
@@ -261,7 +282,15 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
                     required
                   />
                 </div>
-                <span className="mreg-u-helper-text">Calculada con la vigencia; puedes ajustarla</span>
+                <span className="mreg-u-helper-text">
+                  {fechaCaducidad && fechaCaducidad < fechaHoy ? (
+                    <span style={{ color: '#dc2626', fontWeight: '600' }}>
+                      ⚠️ Fecha vencida: se registrará con estado "Caducado"
+                    </span>
+                  ) : (
+                    'Calculada con la vigencia; puedes ajustarla'
+                  )}
+                </span>
               </div>
             </div>
           </div>

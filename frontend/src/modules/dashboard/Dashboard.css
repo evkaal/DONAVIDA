@@ -533,12 +533,11 @@
 }
 
 .legend-dot.normal {
-  background-color: #f87171;
-  opacity: 0.7;
+  background-color: #22c55e;
 }
 
 .legend-dot.critico {
-  background-color: #991b1b;
+  background-color: #dc2626;
 }
 
 .dash-chart-blank-body {
