@@ -3,7 +3,7 @@ package handlers
 import (
 	"donavida-backend/internal/database"
 	"encoding/json"
-	"fmt"
+	
 
 	"log"
 	"net/http"
@@ -86,26 +86,25 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("verificado login -> Email: '%s', RolID enviado: %d\n", input.Email, input.RolID)
-
-	// 1. Buscar el usuario en la base de datos por su email y rol
+	// 1. Buscar el usuario en la base de datos ÚNICAMENTE por su email
 	var storedHash string
 	var nombreUsuario string
 	var rolID int
 
-	query := `SELECT nombre, password_hash, rol_id FROM usuarios WHERE email = $1 AND rol_id = $2`
-	err = database.DB.QueryRow(query, input.Email, input.RolID).Scan(&nombreUsuario, &storedHash, &rolID)
+	query := `SELECT nombre, password_hash, rol_id FROM usuarios WHERE email = $1`
+	err = database.DB.QueryRow(query, input.Email).Scan(&nombreUsuario, &storedHash, &rolID)
 
 	if err != nil {
-		http.Error(w, "Correo, contraseña o rol incorrecto", http.StatusUnauthorized)
+		log.Printf("Error buscando usuario por email (%s): %v", input.Email, err)
+		http.Error(w, "Correo o contraseña incorrectos", http.StatusUnauthorized)
 		return
 	}
-	fmt.Printf("Intentando login para: %s con contraseña ingresada: %s\n", input.Email, input.Password)
 
-	// 2. Comparar la contraseña
+	// 2. Comparar la contraseña ingresada en texto plano con el hash de la BD
 	err = bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(input.Password))
 	if err != nil {
-		http.Error(w, "Correo, contraseña o rol incorrecto", http.StatusUnauthorized)
+		log.Printf("Contraseña incorrecta para el usuario: %s", input.Email)
+		http.Error(w, "Correo o contraseña incorrectos", http.StatusUnauthorized)
 		return
 	}
 
@@ -123,7 +122,6 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(jwtKey)
 	if err != nil {
-		log.Printf("Error detallado al firmar el token: %v", err)
 		http.Error(w, "Error al generar el token de acceso", http.StatusInternalServerError)
 		return
 	}
@@ -138,7 +136,6 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		"rol_id":  rolID,
 	})
 }
-
 // Función GetDashboardStats para atender la ruta /api/dashboard/stats
 func GetDashboardStats(w http.ResponseWriter, r *http.Request) {
     if r.Method != http.MethodGet {
@@ -329,6 +326,7 @@ type UnidadInput struct {
 	InstitucionID    int    `json:"institucion_id"`
 }
 
+// RegistrarUnidad atiende la ruta POST /api/unidades
 // RegistrarUnidad atiende la ruta POST /api/unidades
 // RegistrarUnidad atiende la ruta POST /api/unidades
 func RegistrarUnidad(w http.ResponseWriter, r *http.Request) {

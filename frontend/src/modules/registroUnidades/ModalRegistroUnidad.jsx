@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import './ModalRegistroUnidad.css';
-import { registrarUnidad } from '../../services/unidadesService';
+import { registrarUnidad, getUnidades } from '../../services/unidadesService';
 
 // Catálogo de hemocomponentes con su vigencia y volumen por defecto
 const HEMOCOMPONENTES_CATALOGO = {
@@ -70,7 +70,7 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
       const resultado = await registrarUnidad(nuevaUnidad);
 
       if (onSaveSuccess) {
-        onSaveSuccess(resultado);
+        onSaveSuccess(nuevaUnidad);
       }
 
       if (guardarOtro) {
