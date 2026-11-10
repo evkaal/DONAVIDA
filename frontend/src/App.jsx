@@ -4,6 +4,7 @@ import Dashboard from './modules/dashboard';
 import GestionUsuarios from './modules/usuarios';
 import RegistroUnidades from './modules/registroUnidades';
 import StockInventario from './modules/stockInventario';
+import Historico from './modules/historico';
 
 function App() {
   // Estado para el usuario autenticado
@@ -48,6 +49,17 @@ function App() {
   if (moduloApp === 'stock') {
     return (
       <StockInventario
+        usuario={usuario}
+        onCambiarModulo={setModuloApp}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // Módulo: Histórico (Médico y Admin)
+  if (moduloApp === 'historico') {
+    return (
+      <Historico
         usuario={usuario}
         onCambiarModulo={setModuloApp}
         onLogout={handleLogout}
