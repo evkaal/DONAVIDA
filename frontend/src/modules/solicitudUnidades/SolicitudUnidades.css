@@ -1,0 +1,808 @@
+.sol-content-body {
+  padding: 2rem 2.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.sol-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.sol-title-group h1 {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.25rem 0;
+}
+
+.sol-title-group p {
+  font-size: 0.88rem;
+  color: #64748b;
+  margin: 0;
+}
+
+/* FORMULARIO Y RESUMEN LATERAL*/
+.sol-layout-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.sol-form-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Tarjetas */
+.sol-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  padding: 1.35rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.sol-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.sol-card-title-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.sol-card-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 0.15rem 0;
+}
+
+.sol-card-subtitle {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+/* CAMPOS DE FORMULARIO*/
+.sol-readonly-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.sol-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.sol-field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sol-field-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.sol-badge-auto {
+  font-size: 0.68rem;
+  font-weight: 600;
+  background-color: #f1f5f9;
+  color: #64748b;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+}
+
+.sol-readonly-input-box {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.55rem 0.85rem;
+}
+
+.sol-input-icon {
+  display: flex;
+  align-items: center;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.sol-readonly-text {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #334155;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sol-lock-icon {
+  display: flex;
+  align-items: center;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+/* SELECTOR DE PRIORIDAD (TARJETAS RADIO) */
+.sol-priority-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.sol-priority-cards-group {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.85rem;
+}
+
+.sol-priority-card {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.sol-priority-card:hover {
+  background-color: #f8fafc;
+}
+
+.sol-radio-indicator {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.sol-radio-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: transparent;
+  transition: all 0.15s ease;
+}
+
+.sol-priority-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.sol-priority-card-text {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+/* Estado activo de las tarjetas */
+.card-critica.active {
+  border-color: #f87171;
+  background-color: #fff1f2;
+}
+
+.card-critica.active .sol-radio-indicator {
+  border-color: #dc2626;
+}
+
+.card-critica.active .sol-radio-dot {
+  background-color: #dc2626;
+}
+
+.card-critica.active .sol-priority-card-text {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.card-urgente.active {
+  border-color: #fbbf24;
+  background-color: #fffbeb;
+}
+
+.card-urgente.active .sol-radio-indicator {
+  border-color: #d97706;
+}
+
+.card-urgente.active .sol-radio-dot {
+  background-color: #d97706;
+}
+
+.card-urgente.active .sol-priority-card-text {
+  color: #b45309;
+  font-weight: 700;
+}
+
+.card-normal.active {
+  border-color: #86efac;
+  background-color: #f0fdf4;
+}
+
+.card-normal.active .sol-radio-indicator {
+  border-color: #16a34a;
+}
+
+.card-normal.active .sol-radio-dot {
+  background-color: #16a34a;
+}
+
+.card-normal.active .sol-priority-card-text {
+  color: #15803d;
+  font-weight: 700;
+}
+
+.dot-critica {
+  background-color: #dc2626;
+}
+
+.dot-urgente {
+  background-color: #d97706;
+}
+
+.dot-normal {
+  background-color: #16a34a;
+}
+
+/* Textarea de Motivo */
+.sol-textarea {
+  width: 100%;
+  padding: 0.75rem 0.85rem;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #1e293b;
+  outline: none;
+  font-family: inherit;
+  transition: all 0.15s ease;
+  resize: vertical;
+}
+
+.sol-textarea:focus {
+  border-color: #9e1329;
+  box-shadow: 0 0 0 3px rgba(158, 19, 41, 0.1);
+}
+
+.sol-textarea::placeholder {
+  color: #94a3b8;
+}
+
+/* UNIDADES SOLICITADAS*/
+.sol-units-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.btn-add-unit {
+  background-color: #fdf2f4;
+  color: #9e1329;
+  border: 1px solid #fecdd3;
+  padding: 0.45rem 0.95rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-add-unit:hover {
+  background-color: #fee2e2;
+  border-color: #f87171;
+}
+
+.sol-units-table-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 0.5rem 0.4rem 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.05em;
+}
+
+.col-tipo {
+  width: 110px;
+  flex-shrink: 0;
+}
+
+.col-hemo {
+  flex: 1;
+}
+
+.col-cant {
+  width: 115px;
+  flex-shrink: 0;
+}
+
+.col-action {
+  width: 36px;
+  flex-shrink: 0;
+}
+
+.sol-units-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.sol-unit-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sol-custom-select-wrapper {
+  position: relative;
+}
+
+.sol-filter-select {
+  width: 100%;
+  padding: 0.55rem 2rem 0.55rem 0.85rem;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  transition: all 0.15s ease;
+}
+
+.sol-filter-select:hover {
+  border-color: #cbd5e1;
+}
+
+.sol-filter-select:focus {
+  border-color: #9e1329;
+}
+
+/* Stepper numérico */
+.sol-stepper-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background-color: #ffffff;
+  padding: 0.2rem;
+  height: 38px;
+}
+
+.sol-stepper-btn {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 1rem;
+  font-weight: 700;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.1s ease;
+}
+
+.sol-stepper-btn:hover:not(:disabled) {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+.sol-stepper-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.sol-stepper-val {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #0f172a;
+  min-width: 24px;
+  text-align: center;
+}
+
+.btn-delete-row {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+
+.btn-delete-row:hover {
+  background-color: #fef2f2;
+}
+
+/* Estado vacío de unidades */
+.sol-units-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2.5rem 1rem;
+  gap: 0.5rem;
+  border: 1px dashed #e2e8f0;
+  border-radius: 8px;
+  background-color: #fdfdfe;
+}
+
+.sol-empty-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #334155;
+  margin: 0;
+}
+
+.sol-empty-sub {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  max-width: 480px;
+  line-height: 1.5;
+}
+
+/* RESUMEN DE LA SOLICITUD*/
+.sol-summary-column {
+  position: sticky;
+  top: 90px;
+}
+
+.sol-summary-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  padding: 1.35rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.sol-summary-title {
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 1.15rem 0;
+}
+
+.sol-summary-meta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sol-summary-meta-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.84rem;
+}
+
+.meta-label {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.meta-val {
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 0.82rem;
+}
+
+.sol-badge-pendiente {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background-color: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fef3c7;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.sol-dot-amber {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #d97706;
+}
+
+.sol-priority-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.pill-critica {
+  background-color: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fee2e2;
+}
+
+.pill-urgente {
+  background-color: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fef3c7;
+}
+
+.pill-normal {
+  background-color: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #dcfce7;
+}
+
+.sol-summary-divider {
+  height: 1px;
+  background-color: #f1f5f9;
+  margin: 1.15rem 0;
+}
+
+.sol-summary-section-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.65rem;
+  display: block;
+}
+
+.sol-summary-units-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.sol-summary-unit-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.82rem;
+}
+
+.summary-hemo-name {
+  color: #334155;
+  font-weight: 500;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.summary-hemo-qty {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.sol-summary-empty-text {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.sol-summary-total-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.summary-total-label {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.summary-total-val {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #9e1329;
+  line-height: 1;
+}
+
+/* Botones del resumen */
+.sol-summary-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.btn-preview-sol {
+  width: 100%;
+  background-color: #9e1329;
+  color: #ffffff;
+  border: 1px solid #9e1329;
+  padding: 0.65rem 1rem;
+  border-radius: 8px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(158, 19, 41, 0.2);
+}
+
+.btn-preview-sol:hover:not(:disabled) {
+  background-color: #830e22;
+  border-color: #830e22;
+}
+
+.btn-preview-sol:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-cancel-sol {
+  width: 100%;
+  background-color: #ffffff;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-cancel-sol:hover {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+/* Aviso inferior */
+.sol-summary-notice {
+  margin-top: 1rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background-color: #fdf2f4;
+  border: 1px solid #fecdd3;
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+}
+
+.sol-notice-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+
+.sol-summary-notice p {
+  font-size: 0.74rem;
+  color: #9e1329;
+  margin: 0;
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+/* Badges de tipo sanguíneo */
+.blood-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background-color: #fdf2f4;
+  color: #9e1329;
+  border: 1px solid #fecdd3;
+  text-align: center;
+}
+
+/* TAMAÑOS DE ÍCONOS*/
+
+.sol-input-icon svg,
+.sol-lock-icon svg {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+}
+
+.sol-input-icon img,
+.sol-lock-icon img {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+}
+
+.btn-delete-row svg .btn-delete-row img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.btn-preview-sol svg,
+.btn-preview-sol img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.sol-notice-icon svg,
+.sol-notice-icon img {
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+}
+
+/* RESPONSIVIDAD*/
+@media (max-width: 991.98px) {
+  .sol-layout-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sol-summary-column {
+    position: static;
+  }
+
+  .sol-readonly-row {
+    grid-template-columns: 1fr;
+  }
+
+  .sol-priority-cards-group {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .sol-content-body {
+    padding: 1.25rem 1rem;
+  }
+}
