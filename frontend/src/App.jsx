@@ -5,6 +5,8 @@ import GestionUsuarios from './modules/usuarios';
 import RegistroUnidades from './modules/registroUnidades';
 import StockInventario from './modules/stockInventario';
 import Historico from './modules/historico';
+import SolicitudUnidades from './modules/solicitudUnidades';
+import SolicitudesEntrantes from './modules/solicitudesEntrantes';
 
 function App() {
   // Estado para el usuario autenticado
@@ -60,6 +62,28 @@ function App() {
   if (moduloApp === 'historico') {
     return (
       <Historico
+        usuario={usuario}
+        onCambiarModulo={setModuloApp}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // Módulo: Solicitud de Unidades (Médico)
+  if (moduloApp === 'solicitud') {
+    return (
+      <SolicitudUnidades
+        usuario={usuario}
+        onCambiarModulo={setModuloApp}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // Módulo: Solicitudes Entrantes (Médico)
+  if (moduloApp === 'entrantes') {
+    return (
+      <SolicitudesEntrantes
         usuario={usuario}
         onCambiarModulo={setModuloApp}
         onLogout={handleLogout}
