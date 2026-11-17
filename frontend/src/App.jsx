@@ -3,6 +3,7 @@ import Login from './modules/login';
 import Dashboard from './modules/dashboard';
 import GestionUsuarios from './modules/usuarios';
 import RegistroUnidades from './modules/registroUnidades';
+import StockInventario from './modules/inventario/StockInventario';
 
 
 function App() {

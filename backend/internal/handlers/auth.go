@@ -47,7 +47,14 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var input usuarioInput
+	var input struct {
+		Nombre        string `json:"nombre"`
+		Email         string `json:"email"`
+		Password      string `json:"password"`
+		RolID         int    `json:"rol_id"`
+		InstitucionId *int   `json:"institucion_id"` // Usamos puntero para manejar nulos si es un admin general
+	}
+
 	err := json.NewDecoder(r.Body).Decode(&input)
 	if err != nil {
 		http.Error(w, "Error al leer los datos: "+err.Error(), http.StatusBadRequest)
@@ -61,10 +68,11 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Insertar en la base de datos
-	query := `INSERT INTO usuarios (nombre, email, password_hash, rol_id, institucion_id) VALUES ($1, $2, $3, $4, $5)`
+	// Insertar en la base de datos vinculando la institución correspondiente
+	query := `INSERT INTO usuarios (nombre, email, password_hash, rol_id, institucion_id, estado) VALUES ($1, $2, $3, $4, $5, true)`
 	_, err = database.DB.Exec(query, input.Nombre, input.Email, string(hashedPassword), input.RolID, input.InstitucionId)
 	if err != nil {
+		log.Printf("Error al registrar usuario: %v", err)
 		http.Error(w, "Error al registrar el usuario en la BD: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -606,4 +614,34 @@ func EliminarUsuario(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"mensaje": "Usuario eliminado permanentemente"})
+}
+
+
+
+func GetStockPorInstitucion(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 1. Obtener el institucion_id del usuario autenticado (extraído de su token JWT o contexto)
+	// (Supongamos que ya lo extraes y lo tienes en una variable `institucionID`)
+	institucionID := r.URL.Query().Get("institucion_id") // O desde el middleware de autenticación
+
+	// 2. Consulta filtrando estrictamente por la institución
+	query := `
+		SELECT s.id, t.nombre as hemocomponente, s.cantidad, s.fecha_actualizacion
+		FROM stock_inventario s
+		JOIN tipos_hemocomponente t ON s.hemocomponente_id = t.id
+		WHERE s.institucion_id = $1
+	`
+	rows, err := database.DB.Query(query, institucionID)
+	if err != nil {
+		log.Printf("Error al consultar stock: %v", err)
+		http.Error(w, "Error al obtener inventario", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	// ... mapeo a JSON y respuesta ...
 }
