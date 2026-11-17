@@ -45,6 +45,50 @@ function App() {
     );
   }
 
+  // Módulo: Stock de Inventario (Médico y Admin)
+  if (moduloApp === 'stock') {
+    return (
+      <StockInventario
+        usuario={usuario}
+        onCambiarModulo={setModuloApp}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // Módulo: Histórico (Médico y Admin)
+  if (moduloApp === 'historico') {
+    return (
+      <Historico
+        usuario={usuario}
+        onCambiarModulo={setModuloApp}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // Módulo: Solicitud de Unidades (Médico)
+  if (moduloApp === 'solicitud') {
+    return (
+      <SolicitudUnidades
+        usuario={usuario}
+        onCambiarModulo={setModuloApp}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // Módulo: Solicitudes Entrantes (Médico)
+  if (moduloApp === 'entrantes') {
+    return (
+      <SolicitudesEntrantes
+        usuario={usuario}
+        onCambiarModulo={setModuloApp}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
   // Módulo por defecto: Dashboard
   return (
     <Dashboard
