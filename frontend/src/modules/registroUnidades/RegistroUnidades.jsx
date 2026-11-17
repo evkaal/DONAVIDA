@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import './RegistroUnidades.css';
 import ModalRegistroUnidad from './ModalRegistroUnidad';
-import { Sidebar, Navbar } from '../../components/layout';
 
 export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -12,9 +11,9 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
   const [filtroEstado, setFiltroEstado] = useState('todos');
 
   // LISTA DE UNIDADES REGISTRADAS
-  // [BACKEND] Reemplazar con datos obtenidos de GET /api/unidades
   const [unidades, setUnidades] = useState([]);
-const handleGuardarUnidad = (nuevaUnidad) => {
+
+  const handleGuardarUnidad = (nuevaUnidad) => {
     const unidadFormateada = {
       folio: nuevaUnidad.codigo || nuevaUnidad.folio || 'N/D',
       tipo: nuevaUnidad.tipoSangre || nuevaUnidad.tipo || 'O+',
@@ -25,8 +24,8 @@ const handleGuardarUnidad = (nuevaUnidad) => {
     };
     setUnidades((prev) => [unidadFormateada, ...prev]);
   };
- const unidadesFiltradas = unidades.filter((u) => {
-    // Verificamos si existe folio o código de forma segura
+
+  const unidadesFiltradas = unidades.filter((u) => {
     const folioTexto = u.folio || u.codigo || '';
     const coincideFolio = folioTexto.toLowerCase().includes(busquedaFolio.toLowerCase());
     
@@ -36,22 +35,11 @@ const handleGuardarUnidad = (nuevaUnidad) => {
     
     return coincideFolio && coincideTipo && coincideHemo && coincideEstado;
   });
+
   return (
-    <div className="dona-page-wrapper">
-      <Sidebar
-        usuario={usuario}
-        moduloActivo="registro"
-        onCambiarModulo={onCambiarModulo}
-        onLogout={onLogout}
-      />
-
+    <div className="dona-page-wrapper" style={{ width: '100%' }}>
       {/* ÁREA PRINCIPAL */}
-      <div className="dona-main-area">
-        <Navbar
-          usuario={usuario}
-          placeholder="Buscar unidad, folio o solicitud..."
-        />
-
+      <div className="dona-main-area" style={{ width: '100%', margin: 0 }}>
         <main className="dona-content-body">
           <section className="reg-page-header">
             <div className="reg-title-wrapper">
@@ -128,8 +116,7 @@ const handleGuardarUnidad = (nuevaUnidad) => {
               </div>
             </div>
 
-            {/* TABLA DE REGISTRO DE UNIDADES
-                [BACKEND]: Conectar con GET /api/unidades*/}
+            {/* TABLA DE REGISTRO DE UNIDADES */}
             <div className="reg-table-container">
               <table className="reg-table">
                 <thead>
@@ -170,14 +157,12 @@ const handleGuardarUnidad = (nuevaUnidad) => {
                       </tr>
                     ))
                   ) : (
-                    /*[BACKEND]: Aquí se mapearán las filas devueltas por GET /api/unidades */
                     <tr>
                       <td colSpan="7" className="reg-table-empty-cell">
                         <div className="reg-empty-placeholder">
                           <p className="reg-empty-title">Sin unidades registradas hoy (0)</p>
                           <span className="reg-empty-sub">
-                            [BACKEND]: Aquí se mapearán las filas de unidades devueltas por{' '}
-                            <code>GET /api/unidades</code>. Haz clic en <strong>"+ Registrar unidad"</strong> para ingresar un registro.
+                            Haz clic en <strong>"+ Registrar unidad"</strong> para ingresar un registro.
                           </span>
                         </div>
                       </td>

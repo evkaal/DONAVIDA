@@ -3,10 +3,8 @@ import Login from './modules/login';
 import Dashboard from './modules/dashboard';
 import GestionUsuarios from './modules/usuarios';
 import RegistroUnidades from './modules/registroUnidades';
-import StockInventario from './modules/stockInventario';
-import Historico from './modules/historico';
-import SolicitudUnidades from './modules/solicitudUnidades';
-import SolicitudesEntrantes from './modules/solicitudesEntrantes';
+import StockInventario from './modules/inventario/StockInventario';
+
 
 function App() {
   // Estado para el usuario autenticado

@@ -77,18 +77,18 @@ const getRolString = (id) => {
           )}
 
           {/* Stock de inventario (Común para Médico y Admin) */}
-          <li className="dona-nav-item">
-            <button
-              type="button"
-              className={`dona-nav-link ${moduloActivo === 'stock' ? 'active' : ''}`}
-              onClick={() => handleNavClick('stock')}
-            >
-              <span className="dona-nav-icon">
-                <img src="/src/assets/iconos_sidenavbar/caja-alt.png" alt="Stock de inventario" className="dona-nav-icon-img" />
-              </span>
-              <span className="dona-nav-text">Stock de inventario</span>
-            </button>
-          </li>
+         <li className="dona-nav-item">
+  <button
+    type="button"
+    className={`dona-nav-link ${moduloActivo === 'stock' ? 'active' : ''}`}
+    onClick={() => handleNavClick('stock')}
+  >
+    <span className="dona-nav-icon">
+      <img src="/src/assets/iconos_sidenavbar/caja-alt.png" alt="Stock de inventario" className="dona-nav-icon-img" />
+    </span>
+    <span className="dona-nav-text">Stock de inventario</span>
+  </button>
+</li>
 
           {/* Histórico (Común para Médico y Admin) */}
           <li className="dona-nav-item">
