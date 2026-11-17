@@ -14,3 +14,19 @@ export const registrarUnidad = async (unidadData) => {
     throw error;
   }
 };
+
+export const getUnidades = async () => {
+  try{
+    const token = localStorage.getItem('token');
+    const response = await api.get('/unidades', {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    return response.data;
+  }catch (error) {
+    console.error("Error al consultar las unidades:", error);
+    throw error;
+  }
+};
+

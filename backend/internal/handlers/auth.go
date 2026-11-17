@@ -3,8 +3,9 @@ package handlers
 import (
 	"donavida-backend/internal/database"
 	"encoding/json"
+"database/sql"
+  "strings"
 	"fmt"
-
 	"log"
 	"net/http"
 	"os"
@@ -86,26 +87,25 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("verificado login -> Email: '%s', RolID enviado: %d\n", input.Email, input.RolID)
-
-	// 1. Buscar el usuario en la base de datos por su email y rol
+	// 1. Buscar el usuario en la base de datos ÚNICAMENTE por su email
 	var storedHash string
 	var nombreUsuario string
 	var rolID int
 
-	query := `SELECT nombre, password_hash, rol_id FROM usuarios WHERE email = $1 AND rol_id = $2`
-	err = database.DB.QueryRow(query, input.Email, input.RolID).Scan(&nombreUsuario, &storedHash, &rolID)
+	query := `SELECT nombre, password_hash, rol_id FROM usuarios WHERE email = $1`
+	err = database.DB.QueryRow(query, input.Email).Scan(&nombreUsuario, &storedHash, &rolID)
 
 	if err != nil {
-		http.Error(w, "Correo, contraseña o rol incorrecto", http.StatusUnauthorized)
+		log.Printf("Error buscando usuario por email (%s): %v", input.Email, err)
+		http.Error(w, "Correo o contraseña incorrectos", http.StatusUnauthorized)
 		return
 	}
-	fmt.Printf("Intentando login para: %s con contraseña ingresada: %s\n", input.Email, input.Password)
 
-	// 2. Comparar la contraseña
+	// 2. Comparar la contraseña ingresada en texto plano con el hash de la BD
 	err = bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(input.Password))
 	if err != nil {
-		http.Error(w, "Correo, contraseña o rol incorrecto", http.StatusUnauthorized)
+		log.Printf("Contraseña incorrecta para el usuario: %s", input.Email)
+		http.Error(w, "Correo o contraseña incorrectos", http.StatusUnauthorized)
 		return
 	}
 
@@ -123,7 +123,6 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(jwtKey)
 	if err != nil {
-		log.Printf("Error detallado al firmar el token: %v", err)
 		http.Error(w, "Error al generar el token de acceso", http.StatusInternalServerError)
 		return
 	}
@@ -141,83 +140,93 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 // Función GetDashboardStats para atender la ruta /api/dashboard/stats
 func GetDashboardStats(w http.ResponseWriter, r *http.Request) {
-    if r.Method != http.MethodGet {
-        http.Error(w, "Metodo no permitido", http.StatusMethodNotAllowed)
-        return
-    }
+	if r.Method != http.MethodGet {
+		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
 
-    var uniDisponibles, proxCaducar, SolPendientes, nivCriticos int
+	// 1. Obtener el parámetro de institución de la URL (ej. ?institucion_id=1)
+	institucionParam := r.URL.Query().Get("institucion_id")
+	var instID int = 0
+	if institucionParam != "" {
+		fmt.Sscanf(institucionParam, "%d", &instID)
+	}
 
-    // 1. Unidades disponibles (Usando LEFT JOIN por seguridad, igual que GetStockPorTipo)
-    err := database.DB.QueryRow(`
-        SELECT COUNT(h.id) FROM hemocomponentes h
-        JOIN estados_hemocomponente e ON h.estado_id = e.id
-        WHERE e.nombre ILIKE 'disponible'
-    `).Scan(&uniDisponibles)
-    if err != nil {
-        log.Printf("Error al consultar unidades disponibles: %v", err)
-    }
+	var uniDisponibles, proxCaducar, SolPendientes, nivCriticos int
 
-    // 2. Próximas a caducar
-    err = database.DB.QueryRow(`
-        SELECT COUNT(h.id) FROM hemocomponentes h 
-        JOIN estados_hemocomponente e ON h.estado_id = e.id
-        WHERE e.nombre ILIKE 'disponible'
-          AND h.fecha_caducidad BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
-    `).Scan(&proxCaducar)
-    if err != nil {
-        log.Printf("Error al consultar las unidades a caducar: %v", err)
-    }
+	// 2. Unidades disponibles (Si instID es 0 trae todo, si tiene valor filtra por institución)
+	err := database.DB.QueryRow(`
+		SELECT COUNT(h.id) FROM hemocomponentes h
+		JOIN estados_hemocomponente e ON h.estado_id = e.id
+		WHERE e.nombre ILIKE 'disponible' AND ($1 = 0 OR h.institucion_id = $1)
+	`, instID).Scan(&uniDisponibles)
+	if err != nil {
+		log.Printf("Error al consultar unidades disponibles: %v", err)
+	}
 
-    // 3. Solicitudes pendientes (Protegida por si la tabla de solicitudes aún está vacía o en desarrollo)
-    err = database.DB.QueryRow(`
-        SELECT COUNT(s.id) FROM solicitudes_emergencia s
-        JOIN estados_solicitud e ON s.estado_id = e.id
-        WHERE e.nombre ILIKE 'pendiente'
-    `).Scan(&SolPendientes)
-    if err != nil {
-        log.Printf("Error al consultar las solicitudes pendientes (puede que la tabla esté vacía): %v", err)
-        SolPendientes = 0
-    }
+	// 3. Próximas a caducar
+	err = database.DB.QueryRow(`
+		SELECT COUNT(h.id) FROM hemocomponentes h 
+		JOIN estados_hemocomponente e ON h.estado_id = e.id
+		WHERE e.nombre ILIKE 'disponible'
+		  AND h.fecha_caducidad BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+		  AND ($1 = 0 OR h.institucion_id = $1)
+	`, instID).Scan(&proxCaducar)
+	if err != nil {
+		log.Printf("Error al consultar las unidades a caducar: %v", err)
+	}
 
-    // 4. Niveles críticos (Protegida por si la tabla umbrales_stock no se usa en este sprint)
-    err = database.DB.QueryRow(`
-        SELECT COUNT(u.id) 
-        FROM umbrales_stock u
-        WHERE (
-            SELECT COUNT(h.id) 
-            FROM hemocomponentes h
-            JOIN estados_hemocomponente eh ON h.estado_id = eh.id
-            WHERE h.institucion_id = u.institucion_id 
-              AND h.tipo_sangre_id = u.tipo_sangre_id 
-              AND h.tipo_hemocomponente_id = u.tipo_hemocomponente_id
-              AND eh.nombre ILIKE 'disponible'
-        ) <= u.stock_minimo
-    `).Scan(&nivCriticos)
-    if err != nil {
-        log.Printf("Aviso: umbrales_stock no configurado o con error: %v", err)
-        nivCriticos = 0
-    }
+	// 4. Solicitudes pendientes
+	err = database.DB.QueryRow(`
+		SELECT COUNT(s.id) FROM solicitudes_emergencia s
+		JOIN estados_solicitud e ON s.estado_id = e.id
+		WHERE e.nombre ILIKE 'pendiente'
+		  AND ($1 = 0 OR s.institucion_solicitante_id = $1)
+	`, instID).Scan(&SolPendientes)
+	if err != nil {
+		log.Printf("Aviso: Solicitudes pendientes vacías o sin tabla: %v", err)
+		SolPendientes = 0
+	}
 
-    // Respondemos con el JSON estructurado exactamente como lo espera dashboardService.js
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]int{
-        "totalUnidades":         uniDisponibles,
-        "proximasCaducar":       proxCaducar,
-        "solicitudesPendientes": SolPendientes,
-        "nivelesCriticos":       nivCriticos,
-    })
+	// 5. Niveles críticos
+	err = database.DB.QueryRow(`
+		SELECT COUNT(u.id) 
+		FROM umbrales_stock u
+		WHERE ($1 = 0 OR u.institucion_id = $1) AND (
+			SELECT COUNT(h.id) 
+			FROM hemocomponentes h
+			JOIN estados_hemocomponente eh ON h.estado_id = eh.id
+			WHERE h.institucion_id = u.institucion_id 
+			  AND h.tipo_sangre_id = u.tipo_sangre_id 
+			  AND h.tipo_hemocomponente_id = u.tipo_hemocomponente_id
+			  AND eh.nombre ILIKE 'disponible'
+		) <= u.stock_minimo
+	`, instID).Scan(&nivCriticos)
+	if err != nil {
+		log.Printf("Aviso: umbrales_stock no configurado: %v", err)
+		nivCriticos = 0
+	}
+
+	// Responder con el JSON estructurado
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]int{
+		"totalUnidades":         uniDisponibles,
+		"proximasCaducar":       proxCaducar,
+		"solicitudesPendientes": SolPendientes,
+		"nivelesCriticos":       nivCriticos,
+	})
 }
+
 // 1. Obtener stock agrupado por tipo sanguíneo para la gráfica
 // 1. Obtener stock agrupado por tipo sanguíneo para la gráfica
 func GetStockPorTipo(w http.ResponseWriter, r *http.Request) {
-    if r.Method != http.MethodGet {
-        http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
-        return
-    }
+	if r.Method != http.MethodGet {
+		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
 
-    rows, err := database.DB.Query(`
+	rows, err := database.DB.Query(`
         SELECT ts.grupo_abo || ts.factor_rh AS tipo, 
                COUNT(h.id) AS cantidad
         FROM tipos_sangre ts
@@ -226,47 +235,47 @@ func GetStockPorTipo(w http.ResponseWriter, r *http.Request) {
         GROUP BY ts.grupo_abo, ts.factor_rh
         ORDER BY tipo;
     `)
-    if err != nil {
-        http.Error(w, "Error al consultar stock por tipo", http.StatusInternalServerError)
-        return
-    }
-    // Colocamos el defer inmediatamente después de comprobar que no hubo error en la consulta
-    defer rows.Close()
+	if err != nil {
+		http.Error(w, "Error al consultar stock por tipo", http.StatusInternalServerError)
+		return
+	}
+	// Colocamos el defer inmediatamente después de comprobar que no hubo error en la consulta
+	defer rows.Close()
 
-    type StockTipo struct {
-        Tipo      string `json:"tipo"`
-        Cantidad  int    `json:"cantidad"`
-        EsCritico bool   `json:"esCritico"`
-    }
+	type StockTipo struct {
+		Tipo      string `json:"tipo"`
+		Cantidad  int    `json:"cantidad"`
+		EsCritico bool   `json:"esCritico"`
+	}
 
-    var stockList []StockTipo
-    for rows.Next() {
-        var s StockTipo
-        if err := rows.Scan(&s.Tipo, &s.Cantidad); err != nil {
-            continue
-        }
-        s.EsCritico = s.Cantidad <= 10
-        stockList = append(stockList, s)
-    }
+	var stockList []StockTipo
+	for rows.Next() {
+		var s StockTipo
+		if err := rows.Scan(&s.Tipo, &s.Cantidad); err != nil {
+			continue
+		}
+		s.EsCritico = s.Cantidad <= 10
+		stockList = append(stockList, s)
+	}
 
-    // Verificamos si hubo algún error al finalizar el recorrido de las filas (soluciona la advertencia)
-    if err = rows.Err(); err != nil {
-        http.Error(w, "Error al procesar los resultados de stock", http.StatusInternalServerError)
-        return
-    }
+	// Verificamos si hubo algún error al finalizar el recorrido de las filas (soluciona la advertencia)
+	if err = rows.Err(); err != nil {
+		http.Error(w, "Error al procesar los resultados de stock", http.StatusInternalServerError)
+		return
+	}
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(stockList)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stockList)
 }
 
 // 2. Obtener solicitudes recientes para el dashboard
 func GetSolicitudesRecientes(w http.ResponseWriter, r *http.Request) {
-    if r.Method != http.MethodGet {
-        http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
-        return
-    }
+	if r.Method != http.MethodGet {
+		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
 
-    rows, err := database.DB.Query(`
+	rows, err := database.DB.Query(`
         SELECT s.id, ts.grupo_abo || ts.factor_rh AS tipo_sangre, 
                i.nombre AS institucion, sd.cantidad, es.nombre AS estado
         FROM solicitudes_emergencia s
@@ -277,60 +286,54 @@ func GetSolicitudesRecientes(w http.ResponseWriter, r *http.Request) {
         ORDER BY s.fecha_solicitud DESC
         LIMIT 5;
     `)
-    if err != nil {
-        http.Error(w, "Error al consultar solicitudes recientes", http.StatusInternalServerError)
-        return
-    }
-    // Colocamos el defer inmediatamente aquí también
-    defer rows.Close()
+	if err != nil {
+		http.Error(w, "Error al consultar solicitudes recientes", http.StatusInternalServerError)
+		return
+	}
+	// Colocamos el defer inmediatamente aquí también
+	defer rows.Close()
 
-    type SolicitudReciente struct {
-        ID          int    `json:"id"`
-        TipoSangre  string `json:"tipoSangre"`
-        Institucion string `json:"institucion"`
-        Cantidad    int    `json:"unidades"`
-        Estado      string `json:"estado"`
-    }
+	type SolicitudReciente struct {
+		ID          int    `json:"id"`
+		TipoSangre  string `json:"tipoSangre"`
+		Institucion string `json:"institucion"`
+		Cantidad    int    `json:"unidades"`
+		Estado      string `json:"estado"`
+	}
 
-    var solicitudes []SolicitudReciente
-    for rows.Next() {
-        var sol SolicitudReciente
-        var idInt int
-        if err := rows.Scan(&idInt, &sol.TipoSangre, &sol.Institucion, &sol.Cantidad, &sol.Estado); err != nil {
-            continue
-        }
-        sol.ID = idInt
-        solicitudes = append(solicitudes, sol)
-    }
+	var solicitudes []SolicitudReciente
+	for rows.Next() {
+		var sol SolicitudReciente
+		var idInt int
+		if err := rows.Scan(&idInt, &sol.TipoSangre, &sol.Institucion, &sol.Cantidad, &sol.Estado); err != nil {
+			continue
+		}
+		sol.ID = idInt
+		solicitudes = append(solicitudes, sol)
+	}
 
-    // Verificación de errores en el bucle de solicitudes
-    if err = rows.Err(); err != nil {
-        http.Error(w, "Error al procesar las solicitudes recientes", http.StatusInternalServerError)
-        return
-    }
+	// Verificación de errores en el bucle de solicitudes
+	if err = rows.Err(); err != nil {
+		http.Error(w, "Error al procesar las solicitudes recientes", http.StatusInternalServerError)
+		return
+	}
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(solicitudes)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(solicitudes)
 }
-
-
-
-
 
 // RegistrarUnidad atiende la ruta POST /api/unidades
 type UnidadInput struct {
-	Codigo           string `json:"codigo"`
-	TipoSangre       string `json:"tipoSangre"`       // Ej: "O+"
-	Hemocomponente   string `json:"hemocomponente"`   // Ej: "Concentrado eritrocitario"
-	Volumen          string `json:"volumen"`
-	FechaExtraccion  string `json:"fechaExtraccion"`
-	FechaCaducidad   string `json:"fechaCaducidad"`
-	Estado           string `json:"estado"`           // "Disponible"
-	InstitucionID    int    `json:"institucion_id"`
+	Codigo          string `json:"codigo"`
+	TipoSangre      string `json:"tipoSangre"`     // Ej: "O+"
+	Hemocomponente  string `json:"hemocomponente"` // Ej: "Concentrado eritrocitario"
+	Volumen         string `json:"volumen"`
+	FechaExtraccion string `json:"fechaExtraccion"`
+	FechaCaducidad  string `json:"fechaCaducidad"`
+	Estado          string `json:"estado"` // "Disponible"
+	InstitucionID   int    `json:"institucion_id"`
 }
 
-// RegistrarUnidad atiende la ruta POST /api/unidades
-// RegistrarUnidad atiende la ruta POST /api/unidades
 func RegistrarUnidad(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
@@ -370,7 +373,7 @@ func RegistrarUnidad(w http.ResponseWriter, r *http.Request) {
 		SELECT id FROM tipos_hemocomponente WHERE nombre ILIKE $1
 	`, input.Hemocomponente).Scan(&tipoHemocomponenteID)
 	if err != nil {
-		tipoHemocomponenteID = 1 
+		tipoHemocomponenteID = 1
 	}
 
 	// 3. Obtener el ID del estado (ej. "Disponible")
@@ -379,7 +382,7 @@ func RegistrarUnidad(w http.ResponseWriter, r *http.Request) {
 		SELECT id FROM estados_hemocomponente WHERE nombre ILIKE $1
 	`, input.Estado).Scan(&estadoID)
 	if err != nil {
-		estadoID = 1 
+		estadoID = 1
 	}
 
 	// 4. Insertar en la tabla hemocomponentes (sin el campo volumen que no existe en la BD)
@@ -413,4 +416,194 @@ func RegistrarUnidad(w http.ResponseWriter, r *http.Request) {
 		"mensaje": "Unidad registrada con éxito en la BD",
 		"id":      nuevoID,
 	})
+}
+
+func GetInstituciones(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Tu consulta a la base de datos aquí...
+	rows, err := database.DB.Query("SELECT id, nombre FROM instituciones ORDER BY nombre")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type Institucion struct {
+		ID     int    `json:"id"`
+		Nombre string `json:"nombre"`
+	}
+
+	lista := []Institucion{}
+	for rows.Next() {
+		var i Institucion
+		if err := rows.Scan(&i.ID, &i.Nombre); err != nil {
+			continue
+		}
+		lista = append(lista, i)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(lista)
+}
+
+// RegistrarInstitucion atiende la ruta POST /api/instituciones
+func RegistrarInstitucion(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 1. Validar token y rol de Admin General...
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, "Token de autorización requerido", http.StatusUnauthorized)
+		return
+	}
+	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+	claims := &claims{}
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+	if err != nil || !token.Valid || claims.RolID != 1 {
+		http.Error(w, "Acceso denegado", http.StatusForbidden)
+		return
+	}
+
+	// 2. Estructura que incluye colonia_id
+	var input struct {
+		Nombre            string `json:"nombre"`
+		TipoInstitucionID int    `json:"tipo_institucion_id"`
+		ColoniaID         int    `json:"colonia_id"`
+		Telefono          string `json:"telefono"`
+		CalleNumero       string `json:"calle_numero"`
+	}
+
+	err = json.NewDecoder(r.Body).Decode(&input)
+	if err != nil {
+		http.Error(w, "Error al leer los datos", http.StatusBadRequest)
+		return
+	}
+
+	// 3. Inserción con colonia_id incluido
+	var nuevoID int
+	query := `
+		INSERT INTO instituciones (nombre, tipo_institucion_id, colonia_id, telefono, calle_numero, activo) 
+		VALUES ($1, $2, $3, $4, $5, true) 
+		RETURNING id
+	`
+	err = database.DB.QueryRow(query, input.Nombre, input.TipoInstitucionID, input.ColoniaID, input.Telefono, input.CalleNumero).Scan(&nuevoID)
+	if err != nil {
+		log.Printf("Error al registrar institución en BD: %v", err)
+		http.Error(w, "Error al registrar la institución en la base de datos: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"mensaje": "Institución registrada con éxito",
+		"id":      nuevoID,
+	})
+}
+
+// 1. Obtener todos los usuarios registrados (con el nombre de su institución y rol)
+func GetUsuarios(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	query := `
+		SELECT u.id, u.nombre, u.email, 
+		       COALESCE(r.nombre, 'Sin Rol') as rol, 
+		       COALESCE(i.nombre, 'Sin Institución') as institucion, 
+		       u.estado, u.created_at
+		FROM usuarios u
+		LEFT JOIN roles r ON u.rol_id = r.id
+		LEFT JOIN instituciones i ON u.institucion_id = i.id
+		ORDER BY u.id DESC
+	`
+	rows, err := database.DB.Query(query)
+	if err != nil {
+		log.Printf("Error al consultar usuarios en BD: %v", err)
+		http.Error(w, "Error al obtener usuarios: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type UsuarioResponse struct {
+		ID          int    `json:"id"`
+		Nombre      string `json:"nombre"`
+		Email       string `json:"email"`
+		Rol         string `json:"rol"`
+		Institucion string `json:"institucion"`
+		Activo      bool   `json:"activo"`
+		CreatedAt   string `json:"created_at"`
+	}
+
+	var usuarios []UsuarioResponse
+	for rows.Next() {
+		var u UsuarioResponse
+		var createdAt sql.NullString // Para manejar timestamps de forma segura
+		err := rows.Scan(&u.ID, &u.Nombre, &u.Email, &u.Rol, &u.Institucion, &u.Activo, &createdAt)
+		if err != nil {
+			log.Printf("Error escaneando usuario: %v", err)
+			continue
+		}
+		if createdAt.Valid {
+			u.CreatedAt = createdAt.String
+		} else {
+			u.CreatedAt = "N/A"
+		}
+		usuarios = append(usuarios, u)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(usuarios)
+}
+
+// 2. Eliminar un usuario por su ID (Exclusivo Admin General)
+func EliminarUsuario(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/usuarios/")
+	userID := strings.TrimSpace(path)
+
+	if userID == "" {
+		http.Error(w, "ID de usuario inválido", http.StatusBadRequest)
+		return
+	}
+
+	// 1. Eliminar primero los registros dependientes en solicitudes_emergencia (si aplica)
+	_, err := database.DB.Exec(`DELETE FROM solicitudes_emergencia WHERE usuario_solicitante_id = $1`, userID)
+	if err != nil {
+		log.Printf("Advertencia al limpiar solicitudes del usuario: %v", err)
+		// Puedes decidir si continuar o retornar error
+	}
+
+	// 2. Ahora procedemos a borrar físicamente al usuario de la base de datos
+	query := `DELETE FROM usuarios WHERE id = $1`
+	result, err := database.DB.Exec(query, userID)
+	if err != nil {
+		log.Printf("Error al eliminar usuario en BD: %v", err)
+		http.Error(w, "Error al eliminar el usuario en la base de datos", http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		http.Error(w, "Usuario no encontrado", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"mensaje": "Usuario eliminado permanentemente"})
 }

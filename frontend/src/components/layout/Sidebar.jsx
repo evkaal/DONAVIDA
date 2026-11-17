@@ -1,9 +1,21 @@
 import React from 'react';
 import './Sidebar.css';
+import { registerUser } from '../../services/authService';
 
 export default function Sidebar({ usuario, moduloActivo = 'dashboard', onCambiarModulo, onLogout }) {
-  // Roles posibles: 'medico' | 'admin_ins' | 'admin_gen'
-  const rol = usuario?.rol ?? '';
+  // Roles 
+
+
+const getRolString = (id) => {
+  if (id === 1) return 'admin_gen';
+  if (id === 2) return 'admin_ins';
+  if (id === 3) return 'medico';
+  return usuario?.rol || 'medico';
+};
+
+
+
+  const rol = getRolString(usuario?.rol_id);
   const esAdminGen = rol === 'admin_gen';
   const esAdminIns = rol === 'admin_ins';
   const esAdminCual = esAdminGen || esAdminIns;  // cualquier tipo de admin

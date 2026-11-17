@@ -1,21 +1,12 @@
-import React, { useState } from 'react';
-import './Login.css';
-import { loginUser } from '../../services/authService';
-
-const ROLES_INGRESO = [
-  { id: 3, label: 'Personal médico' },
-  { id: 2, label: 'Admin. institución' },
-  { id: 1, label: 'Admin. general' },
-];
+import React, { useState } from "react";
+import "./Login.css";
+import { loginUser } from "../../services/authService";
 
 export default function Login({ onLoginSuccess }) {
   // Estados del formulario
-  const [correo, setCorreo] = useState('');
-  const [password, setPassword] = useState('');
+  const [correo, setCorreo] = useState("");
+  const [password, setPassword] = useState("");
   const [recordarme, setRecordarme] = useState(false);
-
-  // Estado del rol seleccionado
-  const [rolSeleccionado, setRolSeleccionado] = useState('medico');
 
   // Estados de interfaz
   const [mostrarPassword, setMostrarPassword] = useState(false);
@@ -30,29 +21,27 @@ export default function Login({ onLoginSuccess }) {
     setCargando(true);
 
     try {
-      // Llamada real al backend en Go usando la capa de servicios de Axios
-      const data = await loginUser({ 
-        email: correo.trim(), 
+      // Llamada real al backend en Go enviando únicamente email y password
+      const data = await loginUser({
+        email: correo.trim(),
         password: password,
-        rol_id: rolSeleccionado 
       });
 
       // Si el backend responde con éxito (200 OK)
       setCargando(false);
       setLoginExitoso(true);
 
-      // Opcional: guardar el token JWT devuelto por Go en localStorage
+      // Guardar el token JWT devuelto por Go en localStorage
       if (data && data.token) {
-        localStorage.setItem('token', data.token);
+        localStorage.setItem("token", data.token);
       }
 
       // Redirigir al dashboard únicamente si el login fue exitoso
       setTimeout(() => {
         if (onLoginSuccess) {
-          onLoginSuccess(data)
+          onLoginSuccess(data);
         }
       }, 700);
-
     } catch (err) {
       // Si el backend rechaza las credenciales (401 Unauthorized u otro error)
       setCargando(false);
@@ -68,18 +57,27 @@ export default function Login({ onLoginSuccess }) {
       <div className="login-left-panel col-12 col-lg-6">
         <div className="brand-header">
           <div className="brand-logo-placeholder">
-            <img src="/src/assets/donavida_logo.png" alt="Logo" className="brand-logo-img" />
+            <img
+              src="/src/assets/donavida_logo.png"
+              alt="Logo"
+              className="brand-logo-img"
+            />
           </div>
         </div>
 
         {/* Contenido central del banner */}
         <div className="banner-center-content">
-          <span className="institution-badge">RED INTERHOSPITALARIA · OAXACA</span>
+          <span className="institution-badge">
+            RED INTERHOSPITALARIA · OAXACA
+          </span>
           <h2 className="banner-main-title">
-            Cada unidad<br />de sangre, a tiempo.
+            Cada unidad
+            <br />
+            de sangre, a tiempo.
           </h2>
           <p className="banner-description">
-            Gestiona inventario, entradas, salidas y solicitudes entre hospitales y bancos de sangre en una sola plataforma.
+            Gestiona inventario, entradas, salidas y solicitudes entre
+            hospitales y bancos de sangre en una sola plataforma.
           </p>
         </div>
 
@@ -102,38 +100,29 @@ export default function Login({ onLoginSuccess }) {
         <div className="login-form-container">
           <h2 className="form-header-title">Bienvenido de nuevo</h2>
           <p className="form-header-subtitle">
-            Ingresa con tu cuenta institucional para gestionar el inventario y las solicitudes de sangre.
+            Ingresa con tu cuenta institucional para gestionar el inventario y
+            las solicitudes de sangre.
           </p>
 
-          {/* alarta de credenciales incorrectas aparece*/}
+          {/* Alerta de credenciales incorrectas */}
           {errorLogin && (
             <div className="custom-alert-error" role="alert">
               <div className="alert-error-icon">
-                <img src="/src/assets/iconos_login/exclamacion.png" alt="Error" />
+                <img
+                  src="/src/assets/iconos_login/exclamacion.png"
+                  alt="Error"
+                />
               </div>
               <div>
-                <p className="alert-error-title">Correo o contraseña incorrectos</p>
-                <p className="alert-error-desc">Verifica tus datos e inténtalo de nuevo.</p>
+                <p className="alert-error-title">
+                  Correo o contraseña incorrectos
+                </p>
+                <p className="alert-error-desc">
+                  Verifica tus datos e inténtalo de nuevo.
+                </p>
               </div>
             </div>
           )}
-
-          {/* Seleccionar rol*/}
-          <div className="login-role-selector">
-            <span className="login-role-label">Ingresar como</span>
-            <div className="login-role-buttons">
-              {ROLES_INGRESO.map((rol) => (
-                <button
-                  key={rol.id}
-                  type="button"
-                  className={`login-role-btn ${rolSeleccionado === rol.id ? 'active' : ''}`}
-                  onClick={() => setRolSeleccionado(rol.id)}
-                >
-                  {rol.label}
-                </button>
-              ))}
-            </div>
-          </div>
 
           {/* Formulario */}
           <form onSubmit={handleSubmit}>
@@ -144,7 +133,11 @@ export default function Login({ onLoginSuccess }) {
               </label>
               <div className="input-with-icon-wrapper">
                 <span className="input-left-icon">
-                  <img src="/src/assets/iconos_login/sobre.png" alt="Logo" className="brand-logo-img" />
+                  <img
+                    src="/src/assets/iconos_login/sobre.png"
+                    alt="Logo"
+                    className="brand-logo-img"
+                  />
                 </span>
                 <input
                   id="correo"
@@ -165,11 +158,15 @@ export default function Login({ onLoginSuccess }) {
               </label>
               <div className="input-with-icon-wrapper">
                 <span className="input-left-icon">
-                  <img src="/src/assets/iconos_login/cerrar.png" alt="Logo" className="brand-logo-img" />
+                  <img
+                    src="/src/assets/iconos_login/cerrar.png"
+                    alt="Logo"
+                    className="brand-logo-img"
+                  />
                 </span>
                 <input
                   id="password"
-                  type={mostrarPassword ? 'text' : 'password'}
+                  type={mostrarPassword ? "text" : "password"}
                   className="form-control-custom input-password-field"
                   placeholder="••••••••••••"
                   value={password}
@@ -181,13 +178,23 @@ export default function Login({ onLoginSuccess }) {
                   type="button"
                   className="password-toggle-btn"
                   onClick={() => setMostrarPassword(!mostrarPassword)}
-                  title={mostrarPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  title={
+                    mostrarPassword ? "Ocultar contraseña" : "Ver contraseña"
+                  }
                   aria-label="Alternar visibilidad de contraseña"
                 >
                   {mostrarPassword ? (
-                    <img src="/src/assets/iconos_login/ojo-cruzado.png" alt="Logo" className="brand-logo-img" />
+                    <img
+                      src="/src/assets/iconos_login/ojo-cruzado.png"
+                      alt="Logo"
+                      className="brand-logo-img"
+                    />
                   ) : (
-                    <img src="/src/assets/iconos_login/ojo.png" alt="Logo" className="brand-logo-img" />
+                    <img
+                      src="/src/assets/iconos_login/ojo.png"
+                      alt="Logo"
+                      className="brand-logo-img"
+                    />
                   )}
                 </button>
               </div>
@@ -205,11 +212,23 @@ export default function Login({ onLoginSuccess }) {
               </label>
             </div>
 
-            <button type="submit" className="btn-login-submit" disabled={cargando}>
+            <button
+              type="submit"
+              className="btn-login-submit"
+              disabled={cargando}
+            >
               {cargando ? (
                 <>
                   <span className="spinner-wrapper">
-                    <svg className="spinner-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <svg
+                      className="spinner-icon"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                    >
                       <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                     </svg>
                   </span>

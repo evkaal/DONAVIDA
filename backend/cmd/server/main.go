@@ -5,7 +5,6 @@ import (
 	"donavida-backend/internal/handlers"
 	"fmt"
 	"net/http"
-	
 )
 
 // Middleware para habilitar CORS y permitir peticiones desde React (Vite)
@@ -32,15 +31,58 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Rutas de autenticación
-	//http.HandleFunc("/api/register", handlers.HabilitarCORS(handlers.Register))
-	//http.HandleFunc("/api/login", handlers.HabilitarCORS(handlers.Login))
+	mux.HandleFunc("/api/register", handlers.Register)
+	mux.HandleFunc("/api/login", handlers.Login)
 
-   mux.HandleFunc("/api/register", handlers.Register)
-    mux.HandleFunc("/api/login", handlers.Login)
-   mux.HandleFunc("/api/dashboard/stats", handlers.GetDashboardStats)
-   mux.HandleFunc("/api/dashboard/stock-tipos", handlers.GetStockPorTipo)
-   mux.HandleFunc("/api/solicitudes/recientes", handlers.GetSolicitudesRecientes)
-   mux.HandleFunc("/api/unidades", handlers.RegistrarUnidad)
+	// Ruta unificada para usuarios (GET para listar, POST para registrar)
+	mux.HandleFunc("/api/usuarios", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetUsuarios(w, r)
+		case http.MethodPost:
+			handlers.Register(w, r)
+		default:
+			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Ruta para eliminar usuarios por ID (DELETE /api/usuarios/{id})
+	mux.HandleFunc("/api/usuarios/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			handlers.EliminarUsuario(w, r)
+		} else {
+			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Rutas de dashboard y stock
+	mux.HandleFunc("/api/dashboard/stats", handlers.GetDashboardStats)
+	mux.HandleFunc("/api/dashboard/stock-tipos", handlers.GetStockPorTipo)
+	mux.HandleFunc("/api/solicitudes/recientes", handlers.GetSolicitudesRecientes)
+	mux.HandleFunc("/api/unidades", handlers.RegistrarUnidad)
+
+	// Ruta unificada para instituciones (GET para listar, POST para registrar)
+	mux.HandleFunc("/api/instituciones", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetInstituciones(w, r)
+		case http.MethodPost:
+			handlers.RegistrarInstitucion(w, r)
+		default:
+			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/instituciones/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetInstituciones(w, r)
+		case http.MethodPost:
+			handlers.RegistrarInstitucion(w, r)
+		default:
+			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		}
+	})
 
 	// Ruta de prueba
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
