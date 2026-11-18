@@ -15,6 +15,26 @@ export const registrarUnidad = async (unidadData) => {
   }
 };
 
+
+
+
+export const registrarSalida = async (unidadId, motivo) => {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await api.post(`/unidades/${unidadId}/salida`, { motivo }, {
+      headers: {
+        Authorization: 'Bearer ' + token
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error al registrar la salida:", error);
+    throw error;
+  }
+};
+
+
+
 export const getUnidades = async (institucionId) => {
   try{
     const token = localStorage.getItem('token');
