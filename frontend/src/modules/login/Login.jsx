@@ -58,7 +58,7 @@ export default function Login({ onLoginSuccess }) {
         <div className="brand-header">
           <div className="brand-logo-placeholder">
             <img
-              src="/src/assets/donavida_logo.png"
+              src="/assets/donavida_logo.png"
               alt="Logo"
               className="brand-logo-img"
             />
@@ -109,7 +109,7 @@ export default function Login({ onLoginSuccess }) {
             <div className="custom-alert-error" role="alert">
               <div className="alert-error-icon">
                 <img
-                  src="/src/assets/iconos_login/exclamacion.png"
+                  src="/assets/iconos_login/exclamacion.png"
                   alt="Error"
                 />
               </div>
@@ -134,7 +134,7 @@ export default function Login({ onLoginSuccess }) {
               <div className="input-with-icon-wrapper">
                 <span className="input-left-icon">
                   <img
-                    src="/src/assets/iconos_login/sobre.png"
+                    src="/assets/iconos_login/sobre.png"
                     alt="Logo"
                     className="brand-logo-img"
                   />
@@ -159,7 +159,7 @@ export default function Login({ onLoginSuccess }) {
               <div className="input-with-icon-wrapper">
                 <span className="input-left-icon">
                   <img
-                    src="/src/assets/iconos_login/cerrar.png"
+                    src="/assets/iconos_login/cerrar.png"
                     alt="Logo"
                     className="brand-logo-img"
                   />
@@ -185,13 +185,13 @@ export default function Login({ onLoginSuccess }) {
                 >
                   {mostrarPassword ? (
                     <img
-                      src="/src/assets/iconos_login/ojo-cruzado.png"
+                      src="/assets/iconos_login/ojo-cruzado.png"
                       alt="Logo"
                       className="brand-logo-img"
                     />
                   ) : (
                     <img
-                      src="/src/assets/iconos_login/ojo.png"
+                      src="/assets/iconos_login/ojo.png"
                       alt="Logo"
                       className="brand-logo-img"
                     />

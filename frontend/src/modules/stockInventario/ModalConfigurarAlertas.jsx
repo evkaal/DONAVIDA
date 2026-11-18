@@ -142,7 +142,7 @@ export default function ModalConfigurarAlertas({
           <div className="mstk-hospital-badge-row">
             <div className="mstk-hospital-pill">
               <span className="mstk-hospital-icon">
-                <img src="/src/assets/iconos_registroU/edificio.png" alt="Institución" />
+                <img src="/assets/iconos_registroU/edificio.png" alt="Institución" />
               </span>
               <span className="mstk-hospital-label">Institución:</span>
               <span className="mstk-hospital-name">{hospital}</span>

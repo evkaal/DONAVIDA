@@ -21,7 +21,7 @@ export default function Navbar({
     <header className="dona-topbar">
       <div className="dona-search-wrapper">
         <span className="dona-search-icon">
-          <img src="/src/assets/iconos_sidenavbar/busqueda.png" alt="Buscar" className="dona-search-icon-img" />
+          <img src="/assets/iconos_sidenavbar/busqueda.png" alt="Buscar" className="dona-search-icon-img" />
         </span>
         <input
           type="text"
@@ -40,7 +40,7 @@ export default function Navbar({
           title="Notificaciones"
           onClick={onNotificacionesClick}
         >
-          <img src="/src/assets/iconos_sidenavbar/campana.png" alt="Notificaciones" className="dona-nav-icon-img" />
+          <img src="/assets/iconos_sidenavbar/campana.png" alt="Notificaciones" className="dona-nav-icon-img" />
         </button>
 
         {/* Perfil del usuario */}

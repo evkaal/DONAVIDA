@@ -187,7 +187,7 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
 
                 <div className="sentr-search-box">
                   <span className="sentr-search-icon">
-                    <img src="/src/assets/iconos_sidenavbar/busqueda.png" alt="" />
+                    <img src="/assets/iconos_sidenavbar/busqueda.png" alt="" />
                   </span>
                   <input
                     type="text"
@@ -265,7 +265,7 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
                   <div className="sentr-detail-meta-list">
                     <div className="sentr-meta-item">
                       <span className="sentr-meta-icon">
-                        <img src="/src/assets/iconos_registroU/edificio.png" alt="" />
+                        <img src="/assets/iconos_registroU/edificio.png" alt="" />
                       </span>
                       <div className="sentr-meta-texts">
                         <span className="sentr-meta-val">{solicitudSeleccionada.institucion}</span>
@@ -275,7 +275,7 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
 
                     <div className="sentr-meta-item">
                       <span className="sentr-meta-icon">
-                        <img src="/src/assets/iconos_soliU/usuario.png" alt="" />
+                        <img src="/assets/iconos_soliU/usuario.png" alt="" />
                       </span>
                       <div className="sentr-meta-texts">
                         <span className="sentr-meta-val">{solicitudSeleccionada.solicitante}</span>
@@ -286,7 +286,7 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
                     {/* Teléfono */}
                     <div className="sentr-meta-item">
                       <span className="sentr-meta-icon">
-                        <img src="/src/assets/iconos_soliU/telefono.png" alt="" />
+                        <img src="/assets/iconos_soliU/telefono.png" alt="" />
                       </span>
                       <div className="sentr-meta-texts">
                         <span className="sentr-meta-val">{solicitudSeleccionada.telefono || '951 123 4567'}</span>

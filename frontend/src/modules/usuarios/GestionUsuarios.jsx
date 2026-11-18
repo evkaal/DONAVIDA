@@ -98,7 +98,7 @@ export default function GestionUsuarios({
               >
                 <span>
                   <img
-                    src="/src/assets/iconos_gestionU/agregar-usuario.png"
+                    src="/assets/iconos_gestionU/agregar-usuario.png"
                     alt="DONAVIDA"
                   />
                 </span>
@@ -116,7 +116,7 @@ export default function GestionUsuarios({
               </div>
               <div className="usuarios-kpi-icon-badge badge-users-pink">
                 <img
-                  src="/src/assets/iconos_gestionU/usuarios.png"
+                  src="/assets/iconos_gestionU/usuarios.png"
                   alt="DONAVIDA"
                 />
               </div>
@@ -129,7 +129,7 @@ export default function GestionUsuarios({
               </div>
               <div className="usuarios-kpi-icon-badge badge-users-green">
                 <img
-                  src="/src/assets/iconos_gestionU/usuario-activo.png"
+                  src="/assets/iconos_gestionU/usuario-activo.png"
                   alt="DONAVIDA"
                 />
               </div>
@@ -142,7 +142,7 @@ export default function GestionUsuarios({
               </div>
               <div className="usuarios-kpi-icon-badge badge-users-gray">
                 <img
-                  src="/src/assets/iconos_gestionU/usuario-inactivo.png"
+                  src="/assets/iconos_gestionU/usuario-inactivo.png"
                   alt="DONAVIDA"
                 />
               </div>
@@ -155,7 +155,7 @@ export default function GestionUsuarios({
               <div className="usuarios-search-input-wrapper">
                 <span className="usuarios-search-icon">
                   <img
-                    src="/src/assets/iconos_sidenavbar/busqueda.png"
+                    src="/assets/iconos_sidenavbar/busqueda.png"
                     alt="DONAVIDA"
                   />
                 </span>

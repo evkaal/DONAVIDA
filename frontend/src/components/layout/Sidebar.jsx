@@ -37,7 +37,7 @@ const getRolString = (id) => {
         {/* LOGO DE DONAVIDA */}
         <div className="dona-brand-container">
           <img
-            src="/src/assets/donavida_logo2.png"
+            src="/assets/donavida_logo2.png"
             alt="DONAVIDA"
             className="dona-brand-logo-img"
           />
@@ -54,7 +54,7 @@ const getRolString = (id) => {
               onClick={() => handleNavClick('dashboard')}
             >
               <span className="dona-nav-icon">
-                <img src="/src/assets/iconos_sidenavbar/panel-de-control.png" alt="Dashboard" className="dona-nav-icon-img" />
+                <img src="/assets/iconos_sidenavbar/panel-de-control.png" alt="Dashboard" className="dona-nav-icon-img" />
               </span>
               <span className="dona-nav-text">Dashboard</span>
             </button>
@@ -69,7 +69,7 @@ const getRolString = (id) => {
                 onClick={() => handleNavClick('registro')}
               >
                 <span className="dona-nav-icon">
-                  <img src="/src/assets/iconos_sidenavbar/aplicaciones-anadir.png" alt="Registro de unidades" className="dona-nav-icon-img" />
+                  <img src="/assets/iconos_sidenavbar/aplicaciones-anadir.png" alt="Registro de unidades" className="dona-nav-icon-img" />
                 </span>
                 <span className="dona-nav-text">Registro de unidades</span>
               </button>
@@ -84,7 +84,7 @@ const getRolString = (id) => {
     onClick={() => handleNavClick('stock')}
   >
     <span className="dona-nav-icon">
-      <img src="/src/assets/iconos_sidenavbar/caja-alt.png" alt="Stock de inventario" className="dona-nav-icon-img" />
+      <img src="/assets/iconos_sidenavbar/caja-alt.png" alt="Stock de inventario" className="dona-nav-icon-img" />
     </span>
     <span className="dona-nav-text">Stock de inventario</span>
   </button>
@@ -98,7 +98,7 @@ const getRolString = (id) => {
               onClick={() => handleNavClick('historico')}
             >
               <span className="dona-nav-icon">
-                <img src="/src/assets/iconos_sidenavbar/reloj-tres.png" alt="Histórico" className="dona-nav-icon-img" />
+                <img src="/assets/iconos_sidenavbar/reloj-tres.png" alt="Histórico" className="dona-nav-icon-img" />
               </span>
               <span className="dona-nav-text">Histórico</span>
             </button>
@@ -113,7 +113,7 @@ const getRolString = (id) => {
                 onClick={() => handleNavClick('solicitud')}
               >
                 <span className="dona-nav-icon">
-                  <img src="/src/assets/iconos_sidenavbar/avion-de-papel.png" alt="Solicitud de unidades" className="dona-nav-icon-img" />
+                  <img src="/assets/iconos_sidenavbar/avion-de-papel.png" alt="Solicitud de unidades" className="dona-nav-icon-img" />
                 </span>
                 <span className="dona-nav-text">Solicitud de unidades</span>
               </button>
@@ -129,7 +129,7 @@ const getRolString = (id) => {
                 onClick={() => handleNavClick('entrantes')}
               >
                 <span className="dona-nav-icon">
-                  <img src="/src/assets/iconos_sidenavbar/bandeja-de-entrada.png" alt="Solicitudes entrantes" className="dona-nav-icon-img" />
+                  <img src="/assets/iconos_sidenavbar/bandeja-de-entrada.png" alt="Solicitudes entrantes" className="dona-nav-icon-img" />
                 </span>
                 <span className="dona-nav-text">Solicitudes entrantes</span>
               </button>
@@ -149,7 +149,7 @@ const getRolString = (id) => {
                   onClick={() => handleNavClick('usuarios')}
                 >
                   <span className="dona-nav-icon">
-                    <img src="/src/assets/iconos_sidenavbar/usuarios-alt.png" alt="Gestión de usuarios" className="dona-nav-icon-img" />
+                    <img src="/assets/iconos_sidenavbar/usuarios-alt.png" alt="Gestión de usuarios" className="dona-nav-icon-img" />
                   </span>
                   <span className="dona-nav-text">Gestión de usuarios</span>
                 </button>
@@ -163,7 +163,7 @@ const getRolString = (id) => {
       <div className="dona-sidebar-bottom">
         <button type="button" className="dona-btn-logout" onClick={onLogout}>
           <span className="dona-logout-icon">
-            <img src="/src/assets/iconos_sidenavbar/salida.png" alt="Cerrar sesión" className="dona-nav-icon-img" />
+            <img src="/assets/iconos_sidenavbar/salida.png" alt="Cerrar sesión" className="dona-nav-icon-img" />
           </span>
           <span>Cerrar sesión</span>
         </button>

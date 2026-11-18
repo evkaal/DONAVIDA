@@ -1,0 +1,18 @@
+[Unit]
+Description=DONAVIDA backend (Go)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/donavida/backend
+EnvironmentFile=/opt/donavida/backend/.env
+ExecStart=/opt/donavida/backend/app
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
