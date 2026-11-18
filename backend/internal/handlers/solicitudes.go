@@ -187,13 +187,65 @@ func resolveHemocomponenteID(nombre string) (int, error) {
 	return 0, fmt.Errorf("hemocomponente no encontrado: %s", nombre)
 }
 
-// resolvePorPatron busca un id en una tabla de catálogo por nombre con ILIKE
-// usando un patrón parcial, para tolerar mayúsculas y acentos
-// ("critica" encuentra "Crítica", "urgente" encuentra "Urgente", etc.).
+// resolvePorPatron busca un id en una tabla de catálogo por nombre,
+// tolerando mayúsculas, acentos y sufijos. Postgres ILIKE es insensible
+// a mayúsculas pero SENSIBLE a acentos ("%crit%" no casa con "Crítica"),
+// así que la comparación se hace en Go con normalizarNombre: (a) primero
+// coincidencia exacta normalizada; (b) si no hay, substring normalizado
+// en ambas direcciones. El `patron` llega como patrón LIKE con `%`
+// (ej. "%crit%"): se le quitan los `%` y se normaliza antes de comparar.
+// Devuelve el id menor entre los que casen (las filas se leen ordenadas
+// por id). Si nada casa, devuelve sql.ErrNoRows para que el llamador
+// siga devolviendo su 400 con mensaje claro.
+// Solo se aceptan las dos tablas de catálogo que usan los llamadores;
+// el nombre de tabla nunca viene del usuario (solo literales).
 func resolvePorPatron(tabla, patron string) (int, error) {
-	var id int
-	err := database.DB.QueryRow(fmt.Sprintf(`SELECT id FROM %s WHERE nombre ILIKE $1 ORDER BY id LIMIT 1`, tabla), patron).Scan(&id)
-	return id, err
+	if tabla != "niveles_prioridad" && tabla != "estados_solicitud" {
+		return 0, fmt.Errorf("tabla de catálogo no permitida: %s", tabla)
+	}
+	buscado := normalizarNombre(strings.ReplaceAll(patron, "%", ""))
+	if buscado == "" {
+		return 0, sql.ErrNoRows
+	}
+	rows, err := database.DB.Query(fmt.Sprintf(`SELECT id, nombre FROM %s ORDER BY id`, tabla))
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	// (a) coincidencia exacta normalizada (id menor primero).
+	var candidatos []struct {
+		id   int
+		norm string
+	}
+	for rows.Next() {
+		var c struct {
+			id   int
+			norm string
+		}
+		var nombre string
+		if err := rows.Scan(&c.id, &nombre); err != nil {
+			continue
+		}
+		c.norm = normalizarNombre(nombre)
+		candidatos = append(candidatos, c)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	for _, c := range candidatos {
+		if c.norm == buscado {
+			return c.id, nil
+		}
+	}
+	// (b) substring normalizado en ambas direcciones: "%crit%" casa con
+	// "Crítica" (critica), "%pendient%" con "Pendiente", "%acept%" con
+	// "Aceptada", "%rechaz%" con "Rechazada", "%normal%" con "Normal".
+	for _, c := range candidatos {
+		if strings.Contains(c.norm, buscado) || strings.Contains(buscado, c.norm) {
+			return c.id, nil
+		}
+	}
+	return 0, sql.ErrNoRows
 }
 
 // ---------------------------------------------------------------------------
