@@ -216,28 +216,25 @@ export default function Historico({ usuario, onCambiarModulo, onLogout }) {
     );
   };
 
+  // Badge de estado: cada estado muestra SU propio nombre. Un estado
+  // desconocido se muestra capitalizado, nunca "Cancelada" por default
+  // (antes, 'pendiente' y 'aceptada' caían en el default y se veían
+  // como "Cancelada" aunque la solicitud seguía pendiente en la BD).
   const renderEstadoBadge = (estado) => {
-    const e = estado?.toLowerCase();
-    if (e === 'completada') {
-      return (
-        <span className="hist-estado-badge estado-completada">
-          <span className="hist-dot dot-completada"></span>
-          Completada
-        </span>
-      );
-    }
-    if (e === 'rechazada') {
-      return (
-        <span className="hist-estado-badge estado-rechazada">
-          <span className="hist-dot dot-rechazada"></span>
-          Rechazada
-        </span>
-      );
-    }
+    const e = (estado || '').toLowerCase().trim();
+    const mapa = {
+      pendiente: ['estado-pendiente', 'dot-pendiente', 'Pendiente'],
+      aceptada: ['estado-aceptada', 'dot-aceptada', 'Aceptada'],
+      completada: ['estado-completada', 'dot-completada', 'Completada'],
+      rechazada: ['estado-rechazada', 'dot-rechazada', 'Rechazada'],
+      cancelada: ['estado-cancelada', 'dot-cancelada', 'Cancelada'],
+    };
+    const nombrePropio = e ? e.charAt(0).toUpperCase() + e.slice(1) : 'Sin estado';
+    const [cls, dot, texto] = mapa[e] || ['estado-desconocido', 'dot-desconocido', nombrePropio];
     return (
-      <span className="hist-estado-badge estado-cancelada">
-        <span className="hist-dot dot-cancelada"></span>
-        Cancelada
+      <span className={`hist-estado-badge ${cls}`}>
+        <span className={`hist-dot ${dot}`}></span>
+        {texto}
       </span>
     );
   };

@@ -855,11 +855,24 @@ func GetSolicitudesEntrantes(w http.ResponseWriter, r *http.Request) {
 
 // ---------------------------------------------------------------------------
 // POST /api/solicitudes/entrantes/{id}/aceptar | /rechazar
+// Solo el administrador institucional (rol_id 2) puede responder
+// solicitudes entrantes: es quien atiende los requerimientos de su
+// institución. El personal médico (rol_id 3) las ve en solo lectura y
+// el admin general (rol_id 1) no atiende solicitudes de instituciones.
 // ---------------------------------------------------------------------------
 
 func ResponderSolicitud(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
+	sesion, ok := sesionDesdeToken(r)
+	if !ok {
+		http.Error(w, "Token de autorización requerido", http.StatusUnauthorized)
+		return
+	}
+	if sesion.RolID != 2 {
+		http.Error(w, "Solo el administrador institucional puede responder solicitudes entrantes", http.StatusForbidden)
 		return
 	}
 	// Ruta: /api/solicitudes/entrantes/SOL-0001/aceptar (o id numérico).

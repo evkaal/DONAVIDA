@@ -75,8 +75,13 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	// (columna de la migración 000002) y, si es admin_institucion (rol_id 2),
 	// la institución del nuevo usuario se fuerza a la suya: no puede crear
 	// usuarios para otra institución. Tampoco puede crear un admin general.
+	// El personal médico (rol_id 3) NO puede crear usuarios.
 	// Sin token (registro público /api/register), creado_por queda NULL.
 	creador, tieneCreador := sesionDesdeToken(r)
+	if tieneCreador && creador.RolID == 3 {
+		http.Error(w, "El personal médico no puede crear usuarios", http.StatusForbidden)
+		return
+	}
 	institucionID := input.InstitucionId
 	if tieneCreador {
 		if creador.RolID == 2 {

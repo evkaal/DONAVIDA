@@ -393,6 +393,36 @@
   background-color: #64748b;
 }
 
+.estado-pendiente {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.dot-pendiente {
+  background-color: #d97706;
+}
+
+.estado-aceptada {
+  background-color: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #dcfce7;
+}
+
+.dot-aceptada {
+  background-color: #16a34a;
+}
+
+.estado-desconocido {
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.dot-desconocido {
+  background-color: #94a3b8;
+}
+
 /* ESTADO VACÍO INICIAL*/
 .hist-table-empty-cell {
   padding: 3.5rem 1rem !important;

@@ -16,7 +16,10 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
   // La institución es solo la de la sesión. Sin fallback: un usuario sin
   // institución no ve entrantes de nadie, ve el aviso.
   const institucionIdSesion = usuarioSesion?.institucion_id ?? null;
-  const esAdminGeneral = usuarioSesion?.rol_id === 1;
+  const esAdminGeneral = Number(usuarioSesion?.rol_id) === 1;
+  // Solo el admin institucional (rol_id 2) puede responder solicitudes
+  // entrantes. El personal médico (rol_id 3) las ve en solo lectura.
+  const puedeResponder = Number(usuarioSesion?.rol_id) === 2;
   const sinInstitucion = !esAdminGeneral && !institucionIdSesion;
 
   const cargarEntrantes = async () => {
@@ -136,28 +139,23 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
     );
   };
 
+  // Badge de estado: cada estado muestra SU propio nombre. Un estado
+  // desconocido se muestra capitalizado, nunca "Pendiente" por default.
   const renderEstadoBadge = (estado) => {
-    const e = estado?.toLowerCase();
-    if (e === 'aceptada') {
-      return (
-        <span className="sentr-badge badge-aceptada">
-          <span className="sentr-dot dot-aceptada"></span>
-          Aceptada
-        </span>
-      );
-    }
-    if (e === 'rechazada') {
-      return (
-        <span className="sentr-badge badge-rechazada">
-          <span className="sentr-dot dot-rechazada"></span>
-          Rechazada
-        </span>
-      );
-    }
+    const e = (estado || '').toLowerCase().trim();
+    const mapa = {
+      pendiente: ['badge-pendiente', 'dot-pendiente', 'Pendiente'],
+      aceptada: ['badge-aceptada', 'dot-aceptada', 'Aceptada'],
+      completada: ['badge-completada', 'dot-completada', 'Completada'],
+      rechazada: ['badge-rechazada', 'dot-rechazada', 'Rechazada'],
+      cancelada: ['badge-cancelada', 'dot-cancelada', 'Cancelada'],
+    };
+    const nombrePropio = e ? e.charAt(0).toUpperCase() + e.slice(1) : 'Sin estado';
+    const [cls, dot, texto] = mapa[e] || ['badge-desconocido', 'dot-desconocido', nombrePropio];
     return (
-      <span className="sentr-badge badge-pendiente">
-        <span className="sentr-dot dot-pendiente"></span>
-        Pendiente
+      <span className={`sentr-badge ${cls}`}>
+        <span className={`sentr-dot ${dot}`}></span>
+        {texto}
       </span>
     );
   };
@@ -191,6 +189,13 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
           {sinInstitucion && (
             <div style={{ background: '#fef3c7', border: '1px solid #fbbf24', color: '#92400e', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '0.95rem' }}>
               <strong>Sin institución asignada.</strong> Pide al administrador general que te asigne una institución.
+            </div>
+          )}
+
+          {/* Solo lectura para quien no puede responder (personal médico) */}
+          {!puedeResponder && !sinInstitucion && (
+            <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '0.95rem' }}>
+              Solo el administrador institucional puede responder solicitudes entrantes.
             </div>
           )}
 
@@ -399,8 +404,8 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
                     </span>
                   </div>
 
-                  {/* Acciones para Responder la Solicitud */}
-                  {solicitudSeleccionada.estado === 'pendiente' && (
+                  {/* Acciones para Responder la Solicitud: solo admin institucional (rol_id 2) */}
+                  {solicitudSeleccionada.estado === 'pendiente' && puedeResponder && (
                     <div className="sentr-actions-row">
                       <button
                         type="button"
@@ -417,6 +422,12 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
                       >
                         <span>Aceptar solicitud</span>
                       </button>
+                    </div>
+                  )}
+
+                  {solicitudSeleccionada.estado === 'pendiente' && !puedeResponder && (
+                    <div className="sentr-status-notice notice-solo-lectura">
+                      Solo el administrador institucional puede responder solicitudes entrantes.
                     </div>
                   )}
 
