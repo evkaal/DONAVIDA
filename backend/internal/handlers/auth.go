@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -43,6 +44,31 @@ type usuarioInput struct {
 	InstitucionId *int   `json:"institucion_id"`
 }
 
+// contrasenaSegura exige mínimo 8 caracteres con al menos una
+// mayúscula, una minúscula y un dígito.
+func contrasenaSegura(p string) bool {
+	if len(p) < 8 {
+		return false
+	}
+	var mayus, minus, digito bool
+	for _, c := range p {
+		switch {
+		case c >= 'A' && c <= 'Z':
+			mayus = true
+		case c >= 'a' && c <= 'z':
+			minus = true
+		case c >= '0' && c <= '9':
+			digito = true
+		}
+	}
+	return mayus && minus && digito
+}
+
+// contieneDigito dice si el texto tiene algún dígito (0-9).
+func contieneDigito(s string) bool {
+	return strings.ContainsAny(s, "0123456789")
+}
+
 // Función Register para atender la ruta /api/register
 func Register(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -61,6 +87,21 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&input)
 	if err != nil {
 		http.Error(w, "Error al leer los datos: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Nombre de usuario sin números (acentos, espacios y guiones sí se
+	// permiten). Solo aplica al nombre del usuario, no a otros campos.
+	if contieneDigito(input.Nombre) {
+		http.Error(w, "El nombre de usuario no puede contener números.", http.StatusBadRequest)
+		return
+	}
+
+	// Contraseña segura: mínimo 8 caracteres, mayúscula, minúscula y
+	// número. Solo se exige al registrar, no al iniciar sesión (los
+	// usuarios existentes con contraseña débil siguen entrando).
+	if !contrasenaSegura(input.Password) {
+		http.Error(w, "La contraseña debe tener al menos 8 caracteres e incluir mayúsculas, minúsculas y números.", http.StatusBadRequest)
 		return
 	}
 
@@ -560,6 +601,99 @@ func RegistrarUnidad(w http.ResponseWriter, r *http.Request) {
 		"id":      nuevoID,
 		"codigo":  codigoGenerado,
 		"folio":   codigoGenerado,
+	})
+}
+
+// RegistrarSalida registra la salida de una unidad del inventario
+// (usada o caducada): cambia su estado a "Entregada" o "Caducada".
+// POST /api/unidades/{id|folio}/salida  { "motivo": "usada" | "caducada" }
+// Requiere token. Quien puede registrar unidades puede registrar salidas:
+// la unidad debe ser de la institución del usuario (admin_general: de
+// cualquiera). Al cambiar el estado, la unidad deja de contar como
+// disponible en Dashboard/Stock (todos los conteos filtran 'disponible').
+func RegistrarSalida(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
+	sesion, ok := sesionDesdeToken(r)
+	if !ok {
+		http.Error(w, "Token de autorización requerido", http.StatusUnauthorized)
+		return
+	}
+	// /api/unidades/{id}/salida -> identificador = {id} (numérico o folio UN-XXXX).
+	rest := strings.TrimPrefix(r.URL.Path, "/api/unidades/")
+	identificador := strings.Trim(strings.TrimSuffix(rest, "/salida"), "/")
+	if identificador == "" || strings.Contains(identificador, "/") {
+		http.Error(w, "Ruta inválida: se espera /api/unidades/{id}/salida", http.StatusBadRequest)
+		return
+	}
+	var input struct {
+		Motivo string `json:"motivo"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "Error al leer los datos de la salida", http.StatusBadRequest)
+		return
+	}
+	// "usada" -> Entregada, "caducada" -> Caducada (comparación sin acentos).
+	motivo := normalizarNombre(input.Motivo)
+	estadoNombre := ""
+	switch motivo {
+	case "usada", "usado", "utilizada", "utilizado":
+		estadoNombre = "Entregada"
+	case "caducada", "caducado", "vencida", "vencido":
+		estadoNombre = "Caducada"
+	default:
+		http.Error(w, "Motivo no válido: usa \"usada\" o \"caducada\"", http.StatusBadRequest)
+		return
+	}
+	// El estado se resuelve por nombre, tolerante a acentos (mismo
+	// enfoque que resolvePorPatron). Si no existe en la BD, 400 claro.
+	estadoID, err := resolvePorPatron("estados_hemocomponente", "%"+estadoNombre+"%")
+	if err != nil {
+		http.Error(w, "El estado '"+estadoNombre+"' no existe en la base de datos. Siembra los estados de hemocomponente (Reservada, Entregada, Por caducar, Caducada).", http.StatusBadRequest)
+		return
+	}
+	// Buscar la unidad por id numérico o por código (folio UN-XXXX).
+	var unidadID, unidadInstID int
+	var codigoUnidad, estadoActual string
+	var errBuscar error
+	consultaUnidad := `
+		SELECT h.id, h.institucion_id, h.codigo_unidad, eh.nombre
+		FROM hemocomponentes h JOIN estados_hemocomponente eh ON eh.id = h.estado_id
+		WHERE %s = $1`
+	if _, errNum := strconv.Atoi(identificador); errNum == nil {
+		errBuscar = database.DB.QueryRow(fmt.Sprintf(consultaUnidad, "h.id"), identificador).Scan(&unidadID, &unidadInstID, &codigoUnidad, &estadoActual)
+	} else {
+		errBuscar = database.DB.QueryRow(fmt.Sprintf(consultaUnidad, "h.codigo_unidad"), identificador).Scan(&unidadID, &unidadInstID, &codigoUnidad, &estadoActual)
+	}
+	if errBuscar != nil {
+		http.Error(w, "Unidad no encontrada", http.StatusNotFound)
+		return
+	}
+	// Solo su institución (admin_general: cualquiera).
+	if sesion.RolID != 1 {
+		if sesion.InstitucionID == nil || unidadInstID != *sesion.InstitucionID {
+			http.Error(w, "No puedes registrar la salida de una unidad de otra institución", http.StatusForbidden)
+			return
+		}
+	}
+	// Solo se puede dar salida a una unidad Disponible.
+	if normalizarNombre(estadoActual) != "disponible" {
+		http.Error(w, "La unidad ya no está disponible (estado actual: "+estadoActual+")", http.StatusBadRequest)
+		return
+	}
+	if _, err := database.DB.Exec(`UPDATE hemocomponentes SET estado_id = $1 WHERE id = $2`, estadoID, unidadID); err != nil {
+		log.Printf("Error al registrar salida de unidad %d: %v", unidadID, err)
+		http.Error(w, "Error al registrar la salida de la unidad", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"mensaje": "Salida registrada con éxito",
+		"id":      unidadID,
+		"folio":   codigoUnidad,
+		"estado":  estadoNombre,
+		"motivo":  motivo,
 	})
 }
 

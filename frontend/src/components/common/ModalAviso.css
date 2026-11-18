@@ -1,0 +1,96 @@
+/* Modal de aviso / confirmación. Sustituye a alert() y confirm() del
+   navegador. Mismo look que los demás modales del proyecto. El z-index
+   (2000) está por encima de los modales de formulario (1050) para que
+   el aviso se vea aunque otro modal esté abierto. */
+.aviso-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 1.5rem;
+  box-sizing: border-box;
+  animation: avisoFadeIn 0.2s ease-out;
+}
+
+.aviso-card {
+  background-color: #ffffff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+  padding: 1.75rem 2rem;
+  box-sizing: border-box;
+  animation: avisoScaleUp 0.2s ease-out;
+}
+
+.aviso-titulo {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.2;
+}
+
+.aviso-mensaje {
+  font-size: 0.95rem;
+  color: #475569;
+  margin: 0 0 1.5rem 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.aviso-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.aviso-btn-aceptar {
+  background-color: #9e1329;
+  color: #ffffff;
+  border: 1px solid #9e1329;
+  padding: 0.65rem 1.35rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.aviso-btn-aceptar:hover {
+  background-color: #830e22;
+  border-color: #830e22;
+}
+
+.aviso-btn-cancelar {
+  background-color: #ffffff;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  padding: 0.65rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.aviso-btn-cancelar:hover {
+  background-color: #f8fafc;
+}
+
+@keyframes avisoFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes avisoScaleUp {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}

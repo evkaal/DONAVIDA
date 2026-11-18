@@ -105,6 +105,15 @@ func main() {
 		}
 	})
 
+	// Salida de unidad: POST /api/unidades/{id}/salida
+	mux.HandleFunc("/api/unidades/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/salida") {
+			handlers.RegistrarSalida(w, r)
+			return
+		}
+		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+	})
+
 	// Solicitudes: POST crea, GET /historico lista el histórico
 	mux.HandleFunc("/api/solicitudes", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './ModalRegistrarInsti.css';
+import ModalAviso from '../../components/common/ModalAviso';
 import { registrarInstitucion, obtenerTiposInstitucion, obtenerColonias } from '../../services/usuariosService';
 
 // Fallback si el catálogo aún no tiene datos sembrados en la BD.
@@ -23,6 +24,8 @@ export default function ModalRegistrarInsti({ isOpen, onClose, onSaveSuccess }) 
   const [codigoPostal, setCodigoPostal] = useState('');
   const [activa, setActiva] = useState(true);
   const [cargando, setCargando] = useState(false);
+  // Aviso sencillo (modal) en lugar de alert() del navegador.
+  const [aviso, setAviso] = useState(null);
 
   // Cargar catálogos al abrir el modal.
   useEffect(() => {
@@ -79,21 +82,21 @@ export default function ModalRegistrarInsti({ isOpen, onClose, onSaveSuccess }) 
 
   const guardar = async (guardarOtra) => {
     if (!nombre.trim() || !telefono.trim() || !calleNumero.trim()) {
-      alert('Por favor completa todos los campos requeridos.');
+      setAviso({ titulo: 'Campos requeridos', mensaje: 'Por favor completa todos los campos requeridos.' });
       return;
     }
     // La colonia se puede elegir de la lista o escribirse manualmente.
     // El código postal siempre es editable (5 dígitos).
     if (!/^[0-9]{5}$/.test(codigoPostal.trim())) {
-      alert('El código postal debe tener 5 dígitos.');
+      setAviso({ titulo: 'Código postal', mensaje: 'El código postal debe tener 5 dígitos.' });
       return;
     }
     if (coloniaId === 'nueva' && !coloniaNuevaNombre.trim()) {
-      alert('Escribe el nombre de la colonia nueva.');
+      setAviso({ titulo: 'Colonia nueva', mensaje: 'Escribe el nombre de la colonia nueva.' });
       return;
     }
     if (!coloniaId) {
-      alert('Elige una colonia o agrega una nueva.');
+      setAviso({ titulo: 'Colonia', mensaje: 'Elige una colonia o agrega una nueva.' });
       return;
     }
     setCargando(true);
@@ -124,7 +127,7 @@ export default function ModalRegistrarInsti({ isOpen, onClose, onSaveSuccess }) 
       }
     } catch (err) {
       console.error("Error al registrar institución:", err);
-      alert(err?.response?.data || "Hubo un error al registrar la institución en la base de datos.");
+      setAviso({ titulo: 'Error', mensaje: String(err?.response?.data || "Hubo un error al registrar la institución en la base de datos.") });
     } finally {
       setCargando(false);
     }
@@ -136,6 +139,7 @@ export default function ModalRegistrarInsti({ isOpen, onClose, onSaveSuccess }) 
   };
 
   return (
+    <>
     <div className="mreg-overlay" onClick={onClose} role="dialog" aria-modal="true">
       <div className="mreg-card" onClick={(e) => e.stopPropagation()}>
         <header className="mreg-header">
@@ -294,5 +298,14 @@ export default function ModalRegistrarInsti({ isOpen, onClose, onSaveSuccess }) 
         </form>
       </div>
     </div>
+
+      {/* Aviso sencillo (modal) en lugar de alert() */}
+      <ModalAviso
+        isOpen={!!aviso}
+        titulo={aviso?.titulo || 'Aviso'}
+        mensaje={aviso?.mensaje}
+        onClose={() => setAviso(null)}
+      />
+    </>
   );
 }

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import "./GestionUsuarios.css";
 import { Sidebar, Navbar } from "../../components/layout";
 import ModalRegistrarUsuario from "./ModalRegistrarUsuario";
+import ModalAviso from "../../components/common/ModalAviso";
 import { obtenerInstituciones, obtenerUsuarios, eliminarUsuarioService, obtenerRoles } from "../../services/usuariosService";
 import ModalRegistrarInstitucion from "../insti/ModalRegistrarInsti";
 
@@ -21,6 +22,9 @@ export default function GestionUsuarios({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModalInstOpen, setIsModalInstOpen] = useState(false);
   const [usuariosList, setUsuariosList] = useState([]);
+  // Aviso y confirmación sencillos (modal) en lugar de alert()/confirm().
+  const [aviso, setAviso] = useState(null);
+  const [confirmacion, setConfirmacion] = useState(null); // { mensaje, onAceptar }
 
   // Función para cargar usuarios
   const cargarUsuarios = async () => {
@@ -56,17 +60,22 @@ export default function GestionUsuarios({
     cargarUsuarios();
   }, []);
 
-  const handleEliminar = async (id) => {
-    if (window.confirm("¿Estás seguro de eliminar este usuario del sistema?")) {
-      try {
-        await eliminarUsuarioService(id);
-        alert("Usuario eliminado con éxito");
-        cargarUsuarios(); // Recargar la tabla
-      } catch (err) {
-        console.error("Error al eliminar:", err);
-        alert("No se pudo eliminar el usuario.");
-      }
+  const eliminarUsuarioConfirmado = async (id) => {
+    try {
+      await eliminarUsuarioService(id);
+      setAviso({ titulo: 'Usuario eliminado', mensaje: 'Usuario eliminado con éxito' });
+      cargarUsuarios(); // Recargar la tabla
+    } catch (err) {
+      console.error("Error al eliminar:", err);
+      setAviso({ titulo: 'Error', mensaje: 'No se pudo eliminar el usuario.' });
     }
+  };
+
+  const handleEliminar = (id) => {
+    setConfirmacion({
+      mensaje: '¿Estás seguro de eliminar este usuario del sistema?',
+      onAceptar: () => eliminarUsuarioConfirmado(id),
+    });
   };
 
   // --- CÁLCULO DINÁMICO PARA LAS TARJETAS KPI ---
@@ -374,6 +383,27 @@ export default function GestionUsuarios({
           cargarUsuarios();
           setIsModalInstOpen(false);
         }}
+      />
+
+      {/* Aviso y confirmación sencillos (modal) en lugar de alert()/confirm() */}
+      <ModalAviso
+        isOpen={!!aviso}
+        titulo={aviso?.titulo || 'Aviso'}
+        mensaje={aviso?.mensaje}
+        onClose={() => setAviso(null)}
+      />
+      <ModalAviso
+        isOpen={!!confirmacion}
+        tipo="confirmacion"
+        titulo="Eliminar usuario"
+        mensaje={confirmacion?.mensaje}
+        textoAceptar="Eliminar"
+        onAceptar={() => {
+          const accion = confirmacion?.onAceptar;
+          setConfirmacion(null);
+          if (accion) accion();
+        }}
+        onClose={() => setConfirmacion(null)}
       />
     </div>
   );

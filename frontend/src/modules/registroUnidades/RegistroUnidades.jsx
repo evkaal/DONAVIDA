@@ -1,12 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import './RegistroUnidades.css';
 import ModalRegistroUnidad from './ModalRegistroUnidad';
+import ModalRegistrarSalida from './ModalRegistrarSalida';
+import ModalAviso from '../../components/common/ModalAviso';
 import { Sidebar } from '../../components/layout';
-import { getUnidades } from '../../services/unidadesService';
+import { getUnidades, registrarSalida } from '../../services/unidadesService';
 import { obtenerHemocomponentes, obtenerTiposSangre } from '../../services/catalogosService';
 
 export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Salida de unidad (usada / caducada): la unidad seleccionada, el
+  // motivo elegido y el aviso de resultado (modal, nunca alert).
+  const [salidaUnidad, setSalidaUnidad] = useState(null);
+  const [motivoSalida, setMotivoSalida] = useState('usada');
+  const [salidaCargando, setSalidaCargando] = useState(false);
+  const [aviso, setAviso] = useState(null);
 
   const [busquedaFolio, setBusquedaFolio] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('todos');
@@ -50,6 +59,7 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
       const data = await getUnidades(institucionIdSesion);
       const lista = Array.isArray(data) ? data : [];
       setUnidades(lista.map((u) => ({
+        id: u.id,
         folio: u.folio || u.codigo || 'N/D',
         tipo: u.tipo || u.tipoSangre || '',
         hemocomponente: u.hemocomponente || '',
@@ -67,6 +77,24 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
   const handleGuardarUnidad = () => {
     // El modal ya registró la unidad en la API; recargamos la tabla real.
     cargarUnidades();
+  };
+
+  // Registrar la salida de la unidad seleccionada (usada o caducada).
+  // Solo se puede dar salida a una unidad Disponible: el botón solo se
+  // muestra en ese caso y el backend también lo valida.
+  const confirmarSalida = async () => {
+    if (!salidaUnidad) return;
+    setSalidaCargando(true);
+    try {
+      await registrarSalida(salidaUnidad.id || salidaUnidad.folio, motivoSalida);
+      setSalidaUnidad(null);
+      setAviso({ titulo: 'Salida registrada', mensaje: 'Salida registrada con éxito.' });
+      cargarUnidades();
+    } catch (err) {
+      setAviso({ titulo: 'Error', mensaje: String(err?.response?.data || err?.message || 'No se pudo registrar la salida.') });
+    } finally {
+      setSalidaCargando(false);
+    }
   };
 
   const unidadesFiltradas = unidades.filter((u) => {
@@ -163,6 +191,7 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
                     <option value="entregada">Entregada</option>
                     <option value="por caducar">Por caducar</option>
                     <option value="reservada">Reservada</option>
+                    <option value="caducada">Caducada</option>
                   </select>
                 </div>
               </div>
@@ -179,7 +208,7 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
                     <th>FECHA DE INGRESO</th>
                     <th>CADUCIDAD</th>
                     <th>ESTADO</th>
-                    <th style={{ width: '40px' }}></th>
+                    <th style={{ width: '120px' }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -202,6 +231,17 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
                           </span>
                         </td>
                         <td className="cell-actions">
+                          {/* Solo una unidad Disponible puede tener salida. */}
+                          {String(u.estado || '').toLowerCase() === 'disponible' && (
+                            <button
+                              type="button"
+                              title="Registrar salida (usada o caducada)"
+                              onClick={() => { setSalidaUnidad(u); setMotivoSalida('usada'); }}
+                              style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem', marginRight: '6px' }}
+                            >
+                              Salida
+                            </button>
+                          )}
                           <button type="button" className="btn-row-menu" title="Acciones">
                             •••
                           </button>
@@ -243,6 +283,25 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
         onClose={() => setIsModalOpen(false)}
         onSaveSuccess={handleGuardarUnidad}
         usuario={usuario}
+      />
+
+      {/* MODAL DE REGISTRO DE SALIDA (usada / caducada) */}
+      <ModalRegistrarSalida
+        isOpen={!!salidaUnidad}
+        unidad={salidaUnidad}
+        motivo={motivoSalida}
+        onMotivoChange={setMotivoSalida}
+        onConfirmar={confirmarSalida}
+        onClose={() => setSalidaUnidad(null)}
+        cargando={salidaCargando}
+      />
+
+      {/* Aviso sencillo (modal) en lugar de alert() */}
+      <ModalAviso
+        isOpen={!!aviso}
+        titulo={aviso?.titulo || 'Aviso'}
+        mensaje={aviso?.mensaje}
+        onClose={() => setAviso(null)}
       />
     </div>
   );

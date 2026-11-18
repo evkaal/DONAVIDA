@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './ModalRegistroUnidad.css';
+import ModalAviso from '../../components/common/ModalAviso';
 import { registrarUnidad } from '../../services/unidadesService';
 import { obtenerHemocomponentes, obtenerTiposSangre } from '../../services/catalogosService';
 
@@ -75,6 +76,8 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
   const [fechaCaducidad, setFechaCaducidad] = useState(() => sumarDiasISO(hoyISO(), 42));
   const [cargando, setCargando] = useState(false);
   const [mensajeExito, setMensajeExito] = useState('');
+  // Aviso sencillo (modal) en lugar de alert() del navegador.
+  const [aviso, setAviso] = useState(null);
 
   // Catálogos reales de la BD. Sin lista hardcodeada: si el catálogo
   // falla o viene vacío, se muestra el error y no se puede registrar.
@@ -161,14 +164,15 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
     // Sin institución no se puede registrar: el backend lo rechazaría,
     // pero se avisa antes de intentar.
     if (!usuario?.institucion_id && usuario?.rol_id !== 1) {
-      alert('Tu usuario no tiene institución asignada. Pide al administrador general que te asigne una institución.');
+      setAviso({ titulo: 'Sin institución', mensaje: 'Tu usuario no tiene institución asignada. Pide al administrador general que te asigne una institución.' });
       return;
     }
     setCargando(true);
     setMensajeExito('');
 
-    // El código de unidad lo genera el servidor (UN-0000, UN-0001, ...):
-    // no se manda codigo y la institución es la de la sesión.
+    // El código de unidad lo genera el servidor: no se manda codigo
+    // y la institución es la de la sesión. El código no se muestra
+    // en el mensaje de éxito.
     const nuevaUnidad = {
       institucion_id: usuario?.institucion_id,
       tipoSangre,
@@ -182,10 +186,9 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
 
     try {
       const resultado = await registrarUnidad(nuevaUnidad);
-      const codigoGenerado = resultado?.codigo || resultado?.folio || '';
-      setMensajeExito(codigoGenerado
-        ? `Unidad ${codigoGenerado} registrada con éxito.`
-        : 'Unidad registrada con éxito.');
+      // El código asignado por el servidor no se menciona: solo se
+      // confirma que la unidad quedó registrada.
+      setMensajeExito('Unidad registrada con éxito.');
 
       if (onSaveSuccess) {
         onSaveSuccess(resultado);
@@ -204,20 +207,21 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
         setFechaExtraccion(hoy);
         setFechaCaducidad(sumarDiasISO(hoy, cfg.vigenciaDias));
       } else {
-        // Se deja ver el código generado un momento y luego se cierra.
+        // Se deja ver el mensaje de éxito un momento y luego se cierra.
         setTimeout(() => { onClose(); }, 1200);
       }
     } catch (error) {
       console.error(error);
       // Se muestra el motivo real del backend (p. ej. "Hemocomponente no
       // válido: ...") en vez de un mensaje genérico.
-      alert(error?.response?.data || 'Hubo un error al registrar la unidad en la base de datos.');
+      setAviso({ titulo: 'Error', mensaje: String(error?.response?.data || 'Hubo un error al registrar la unidad en la base de datos.') });
     } finally {
       setCargando(false);
     }
   };
 
   return (
+    <>
     <div className="mreg-u-overlay" onClick={onClose} role="dialog" aria-modal="true">
       <div className="mreg-u-card" onClick={(e) => e.stopPropagation()}>
         <header className="mreg-u-header">
@@ -303,10 +307,9 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
                   <img src="/assets/iconos_gestionU/cerrar.png" alt="" />
                 </span>
               </div>
-              <span className="mreg-u-helper-text">El sistema asigna el siguiente código disponible (UN-0000, UN-0001, …)</span>
             </div>
 
-            {/* Mensaje de éxito con el código generado por el servidor */}
+            {/* Mensaje de éxito (sin mencionar el código asignado) */}
             {mensajeExito && (
               <div style={{ background: '#dcfce7', border: '1px solid #86efac', color: '#166534', borderRadius: '8px', padding: '10px 14px', marginBottom: '12px', fontWeight: 600 }}>
                 ✓ {mensajeExito}
@@ -447,5 +450,14 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
         </form>
       </div>
     </div>
+
+      {/* Aviso sencillo (modal) en lugar de alert() */}
+      <ModalAviso
+        isOpen={!!aviso}
+        titulo={aviso?.titulo || 'Aviso'}
+        mensaje={aviso?.mensaje}
+        onClose={() => setAviso(null)}
+      />
+    </>
   );
 }
