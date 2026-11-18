@@ -1,21 +1,13 @@
-import axios from 'axios';
-
-const API_URL = 'http://159.173.138.239:8080/api';
+import api from './api';
 
 export const registrarUsuario = async (userData) => {
-  const token = localStorage.getItem('token');
-  const response = await axios.post(`${API_URL}/usuarios`, userData, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  const response = await api.post('/usuarios', userData);
   return response.data;
 };
 
 export const obtenerInstituciones = async () => {
-  const token = localStorage.getItem('token');
   try {
-    const response = await axios.get(`${API_URL}/instituciones`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const response = await api.get('/instituciones');
     // Validar que la respuesta sea un arreglo, si no, retornar array vacío
     return Array.isArray(response.data) ? response.data : [];
   } catch (err) {
@@ -24,24 +16,14 @@ export const obtenerInstituciones = async () => {
   }
 };
 
-
-
 export const registrarInstitucion = async (institucionData) => {
-  const token = localStorage.getItem('token');
-  const response = await axios.post(`${API_URL}/instituciones`, institucionData, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  const response = await api.post('/instituciones', institucionData);
   return response.data;
 };
 
-
-
 export const obtenerUsuarios = async () => {
-  const token = localStorage.getItem('token');
   try {
-    const response = await axios.get(`${API_URL}/usuarios`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const response = await api.get('/usuarios');
     return Array.isArray(response.data) ? response.data : [];
   } catch (err) {
     console.error("Error obteniendo usuarios:", err);
@@ -50,9 +32,26 @@ export const obtenerUsuarios = async () => {
 };
 
 export const eliminarUsuarioService = async (id) => {
-  const token = localStorage.getItem('token');
-  const response = await axios.delete(`${API_URL}/usuarios/${id}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  const response = await api.delete(`/usuarios/${id}`);
   return response.data;
+};
+
+export const obtenerTiposInstitucion = async () => {
+  try {
+    const response = await api.get('/catalogos/tipos-institucion');
+    return Array.isArray(response.data) ? response.data : [];
+  } catch (err) {
+    console.error("Error obteniendo tipos de institución:", err);
+    return [];
+  }
+};
+
+export const obtenerColonias = async () => {
+  try {
+    const response = await api.get('/catalogos/colonias');
+    return Array.isArray(response.data) ? response.data : [];
+  } catch (err) {
+    console.error("Error obteniendo colonias:", err);
+    return [];
+  }
 };

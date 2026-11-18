@@ -1,13 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './StockInventario.css';
 import { Sidebar, Navbar } from '../../components/layout';
 import ModalConfigurarAlertas from './ModalConfigurarAlertas';
+import { obtenerStockInstitucion } from '../../services/stockService';
+import { obtenerInstituciones } from '../../services/usuariosService';
 
 export default function StockInventario({ usuario, onCambiarModulo, onLogout }) {
   // Estado del modal de configuración de alertas y mínimos
   const [isModalAlertasOpen, setIsModalAlertasOpen] = useState(false);
-  // Hospital seleccionado en el filtro
-  const [hospitalSeleccionado, setHospitalSeleccionado] = useState('Hospital General');
+  // Institución seleccionada en el filtro (id como string; '' = la propia)
+  const [hospitalSeleccionado, setHospitalSeleccionado] = useState('');
+  const [institucionesList, setInstitucionesList] = useState([]);
+
+  const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
+  const esAdminGeneral = usuarioSesion?.rol_id === 1;
+  const institucionPropiaId = usuarioSesion?.institucion_id || localStorage.getItem('institucion_id');
+
+  const cargarStock = async (institucionId) => {
+    const data = await obtenerStockInstitucion(institucionId);
+    if (!data) return;
+    if (data.kpis) setKpis((prev) => ({ ...prev, ...data.kpis }));
+    if (Array.isArray(data.matriz)) setMatrizStock(data.matriz);
+    if (data.totalesColumnas) setTotalesColumnas(data.totalesColumnas);
+    if (Array.isArray(data.alertas)) setAlertasStock(data.alertas);
+    if (Array.isArray(data.proximasCaducar)) setUnidadesCaducidad(data.proximasCaducar);
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      const lista = await obtenerInstituciones();
+      setInstitucionesList(lista);
+      // Admin general ve todas; los demás solo su institución.
+      const idInicial = esAdminGeneral ? '' : institucionPropiaId;
+      setHospitalSeleccionado(idInicial || '');
+      await cargarStock(esAdminGeneral ? 0 : institucionPropiaId);
+    };
+    init();
+  }, []);
+
+  const handleCambiarHospital = (e) => {
+    const id = e.target.value;
+    setHospitalSeleccionado(id);
+    cargarStock(id === '' ? 0 : id);
+  };
+
+  const hospitalNombreSeleccionado = institucionesList.find(
+    (inst) => String(inst.id) === String(hospitalSeleccionado)
+  )?.nombre || usuarioSesion?.institucion || 'Hospital General';
 
   // KPIs Superiores (Conectar con endpoint)
   const [kpis, setKpis] = useState({
@@ -98,11 +137,18 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
                 <select
                   className="stock-hospital-select"
                   value={hospitalSeleccionado}
-                  onChange={(e) => setHospitalSeleccionado(e.target.value)}
+                  onChange={handleCambiarHospital}
                 >
-                  <option value="Hospital General">Hospital General</option>
-                  <option value="Hospital Civil Aurelio Valdivieso">Hospital Civil Aurelio Valdivieso</option>
-                  <option value="Hospital de Especialidades">Hospital de Especialidades</option>
+                  {esAdminGeneral && <option value="">Todas las instituciones</option>}
+                  {esAdminGeneral
+                    ? institucionesList.map((inst) => (
+                        <option key={inst.id} value={inst.id}>{inst.nombre}</option>
+                      ))
+                    : institucionesList
+                        .filter((inst) => String(inst.id) === String(institucionPropiaId))
+                        .map((inst) => (
+                          <option key={inst.id} value={inst.id}>{inst.nombre}</option>
+                        ))}
                 </select>
               </div>
 
@@ -426,7 +472,7 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
       <ModalConfigurarAlertas
         isOpen={isModalAlertasOpen}
         onClose={() => setIsModalAlertasOpen(false)}
-        hospital={hospitalSeleccionado}
+        hospital={hospitalNombreSeleccionado}
         usuario={usuario}
         onGuardar={(config) => {
           console.log('[STOCK] Nueva configuración de alertas guardada:', config);

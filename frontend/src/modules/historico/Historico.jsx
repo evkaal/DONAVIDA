@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './Historico.css';
 import { Sidebar, Navbar } from '../../components/layout';
+import { obtenerHistorico } from '../../services/solicitudesService';
 
 /**
  * =========================================================================
@@ -61,9 +62,20 @@ export default function Historico({ usuario, onCambiarModulo, onLogout }) {
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [filtroFecha, setFiltroFecha] = useState('ultimos_20');
 
-  // [BACKEND]: Listado histórico de solicitudes (Inicia en blanco / 0)
-  // Conectar con GET /api/solicitudes/historico
   const [solicitudes, setSolicitudes] = useState([]);
+
+  const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
+  const institucionIdSesion = usuarioSesion?.institucion_id || localStorage.getItem('institucion_id');
+
+  useEffect(() => {
+    const cargarHistorico = async () => {
+      const data = await obtenerHistorico(institucionIdSesion);
+      const lista = Array.isArray(data?.solicitudes) ? data.solicitudes : [];
+      setSolicitudes(lista);
+      if (data?.conteos) setConteos(data.conteos);
+    };
+    cargarHistorico();
+  }, []);
 
   // Conteos de las pestañas superiores (inician en 0)
   const [conteos, setConteos] = useState({
@@ -97,8 +109,21 @@ export default function Historico({ usuario, onCambiarModulo, onLogout }) {
   });
 
   const handleExportar = () => {
-    /* [BACKEND]: Conectar con GET /api/solicitudes/exportar */
-    alert('Exportar histórico (Función conectable al backend / API GET /api/solicitudes/exportar)');
+    const encabezados = ['ID', 'Tipo', 'Institución', 'Prioridad', 'Unidades', 'Solicitada', 'Cerrada', 'Estado'];
+    const filas = solicitudesFiltradas.map((item) => [
+      item.id, item.tipo, item.institucion, item.prioridad, item.unidades,
+      item.solicitada, item.cerrada, item.estado,
+    ]);
+    const csv = [encabezados, ...filas]
+      .map((fila) => fila.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'historico-donavida.csv';
+    a.click();
+    URL.revokeObjectURL(url);
   };
   //helpers
   const renderTipoBadge = (tipo) => {

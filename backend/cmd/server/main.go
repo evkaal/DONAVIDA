@@ -90,7 +90,39 @@ func main() {
 	mux.HandleFunc("/api/dashboard/stats", handlers.GetDashboardStats)
 	mux.HandleFunc("/api/dashboard/stock-tipos", handlers.GetStockPorTipo)
 	mux.HandleFunc("/api/solicitudes/recientes", handlers.GetSolicitudesRecientes)
-	mux.HandleFunc("/api/unidades", handlers.RegistrarUnidad)
+	mux.HandleFunc("/api/stock", handlers.GetStock)
+
+	// Unidades: GET lista, POST registra
+	mux.HandleFunc("/api/unidades", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetUnidades(w, r)
+		case http.MethodPost:
+			handlers.RegistrarUnidad(w, r)
+		default:
+			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Solicitudes: POST crea, GET /historico lista el histórico
+	mux.HandleFunc("/api/solicitudes", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			handlers.CrearSolicitud(w, r)
+		} else {
+			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/solicitudes/historico", handlers.GetHistorico)
+
+	// Solicitudes entrantes: GET lista, POST /{id}/aceptar|/rechazar responde
+	mux.HandleFunc("/api/solicitudes/entrantes", handlers.GetSolicitudesEntrantes)
+	mux.HandleFunc("/api/solicitudes/entrantes/", handlers.ResponderSolicitud)
+
+	// Catálogos simples para formularios
+	mux.HandleFunc("/api/catalogos/tipos-institucion", handlers.GetTiposInstitucion)
+	mux.HandleFunc("/api/catalogos/colonias", handlers.GetColonias)
+	mux.HandleFunc("/api/catalogos/tipos-sangre", handlers.GetTiposSangre)
+	mux.HandleFunc("/api/catalogos/hemocomponentes", handlers.GetHemocomponentes)
 
 	// Ruta unificada para instituciones (GET para listar, POST para registrar)
 	mux.HandleFunc("/api/instituciones", func(w http.ResponseWriter, r *http.Request) {

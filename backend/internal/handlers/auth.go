@@ -21,7 +21,10 @@ var jwtKey = []byte(getJWTSecret())
 func getJWTSecret() string {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		log.Fatal("Fatal: la variable de entorno JWT_Secret no esta definida")
+		secret = os.Getenv("JWT_Secret")
+	}
+	if secret == "" {
+		log.Fatal("Fatal: la variable de entorno JWT_SECRET no esta definida")
 	}
 	return secret
 }
@@ -99,9 +102,14 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	var storedHash string
 	var nombreUsuario string
 	var rolID int
+	var institucionID sql.NullInt64
+	var institucionNombre sql.NullString
 
-	query := `SELECT nombre, password_hash, rol_id FROM usuarios WHERE email = $1`
-	err = database.DB.QueryRow(query, input.Email).Scan(&nombreUsuario, &storedHash, &rolID)
+	query := `SELECT u.nombre, u.password_hash, u.rol_id, u.institucion_id, i.nombre
+		FROM usuarios u
+		LEFT JOIN instituciones i ON u.institucion_id = i.id
+		WHERE u.email = $1`
+	err = database.DB.QueryRow(query, input.Email).Scan(&nombreUsuario, &storedHash, &rolID, &institucionID, &institucionNombre)
 
 	if err != nil {
 		log.Printf("Error buscando usuario por email (%s): %v", input.Email, err)
@@ -137,12 +145,22 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	var institucionIDResp interface{}
+	var institucionResp interface{}
+	if institucionID.Valid {
+		institucionIDResp = int(institucionID.Int64)
+	}
+	if institucionNombre.Valid {
+		institucionResp = institucionNombre.String
+	}
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"mensaje": "Login exitoso",
-		"token":   tokenString,
-		"nombre":  nombreUsuario,
-		"email":   input.Email,
-		"rol_id":  rolID,
+		"mensaje":        "Login exitoso",
+		"token":          tokenString,
+		"nombre":         nombreUsuario,
+		"email":          input.Email,
+		"rol_id":         rolID,
+		"institucion_id": institucionIDResp,
+		"institucion":    institucionResp,
 	})
 }
 
@@ -375,11 +393,18 @@ func RegistrarUnidad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Obtener el ID del tipo de hemocomponente dinámicamente por su nombre
+	// 2. Obtener el ID del tipo de hemocomponente por su columna `componente`
+	// (no `nombre`): primero exacto, luego por patrón ("Plasma fresco"
+	// encuentra "Plasma fresco congelado").
 	var tipoHemocomponenteID int
 	err = database.DB.QueryRow(`
-		SELECT id FROM tipos_hemocomponente WHERE nombre ILIKE $1
+		SELECT id FROM tipos_hemocomponente WHERE componente ILIKE $1 ORDER BY LENGTH(componente) ASC LIMIT 1
 	`, input.Hemocomponente).Scan(&tipoHemocomponenteID)
+	if err != nil {
+		err = database.DB.QueryRow(`
+			SELECT id FROM tipos_hemocomponente WHERE componente ILIKE $1 ORDER BY LENGTH(componente) ASC LIMIT 1
+		`, "%"+input.Hemocomponente+"%").Scan(&tipoHemocomponenteID)
+	}
 	if err != nil {
 		tipoHemocomponenteID = 1
 	}
@@ -488,6 +513,7 @@ func RegistrarInstitucion(w http.ResponseWriter, r *http.Request) {
 		ColoniaID         int    `json:"colonia_id"`
 		Telefono          string `json:"telefono"`
 		CalleNumero       string `json:"calle_numero"`
+		Activo            *bool  `json:"activo"`
 	}
 
 	err = json.NewDecoder(r.Body).Decode(&input)
@@ -497,13 +523,17 @@ func RegistrarInstitucion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Inserción con colonia_id incluido
+	activo := true
+	if input.Activo != nil {
+		activo = *input.Activo
+	}
 	var nuevoID int
 	query := `
-		INSERT INTO instituciones (nombre, tipo_institucion_id, colonia_id, telefono, calle_numero, activo) 
-		VALUES ($1, $2, $3, $4, $5, true) 
+		INSERT INTO instituciones (nombre, tipo_institucion_id, colonia_id, telefono, calle_numero, activo)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id
 	`
-	err = database.DB.QueryRow(query, input.Nombre, input.TipoInstitucionID, input.ColoniaID, input.Telefono, input.CalleNumero).Scan(&nuevoID)
+	err = database.DB.QueryRow(query, input.Nombre, input.TipoInstitucionID, input.ColoniaID, input.Telefono, input.CalleNumero, activo).Scan(&nuevoID)
 	if err != nil {
 		log.Printf("Error al registrar institución en BD: %v", err)
 		http.Error(w, "Error al registrar la institución en la base de datos: "+err.Error(), http.StatusInternalServerError)
@@ -614,34 +644,4 @@ func EliminarUsuario(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"mensaje": "Usuario eliminado permanentemente"})
-}
-
-
-
-func GetStockPorInstitucion(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// 1. Obtener el institucion_id del usuario autenticado (extraído de su token JWT o contexto)
-	// (Supongamos que ya lo extraes y lo tienes en una variable `institucionID`)
-	institucionID := r.URL.Query().Get("institucion_id") // O desde el middleware de autenticación
-
-	// 2. Consulta filtrando estrictamente por la institución
-	query := `
-		SELECT s.id, t.nombre as hemocomponente, s.cantidad, s.fecha_actualizacion
-		FROM stock_inventario s
-		JOIN tipos_hemocomponente t ON s.hemocomponente_id = t.id
-		WHERE s.institucion_id = $1
-	`
-	rows, err := database.DB.Query(query, institucionID)
-	if err != nil {
-		log.Printf("Error al consultar stock: %v", err)
-		http.Error(w, "Error al obtener inventario", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	// ... mapeo a JSON y respuesta ...
 }

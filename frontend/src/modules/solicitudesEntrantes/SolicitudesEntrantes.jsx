@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './SolicitudesEntrantes.css';
 import { Sidebar, Navbar } from '../../components/layout';
+import { obtenerSolicitudesEntrantes, responderSolicitud } from '../../services/solicitudesService';
 
 export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogout }) {
   const [tabActiva, setTabActiva] = useState('pendientes');
@@ -9,6 +10,23 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
   const [busqueda, setBusqueda] = useState('');
 
   const [solicitudes, setSolicitudes] = useState([]);
+
+  const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
+  const institucionIdSesion = usuarioSesion?.institucion_id || localStorage.getItem('institucion_id');
+
+  const cargarEntrantes = async () => {
+    const data = await obtenerSolicitudesEntrantes(institucionIdSesion);
+    const lista = Array.isArray(data) ? data : [];
+    setSolicitudes(lista);
+    setConteos({
+      pendientes: lista.filter((x) => x.estado === 'pendiente').length,
+      aceptadas: lista.filter((x) => x.estado === 'aceptada').length,
+      rechazadas: lista.filter((x) => x.estado === 'rechazada').length,
+      todas: lista.length,
+    });
+  };
+
+  useEffect(() => { cargarEntrantes(); }, []);
 
   // Solicitud actualmente seleccionada
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState(null);
@@ -37,30 +55,41 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
   });
 
   // Manejadores
-  const handleAceptar = (id) => {
-    console.log(`[BACKEND] Aceptando solicitud ${id} en POST /api/solicitudes/entrantes/${id}/aceptar`);
-    alert(`Solicitud ${id} aceptada. Se notificó a la institución y se reservaron las unidades del inventario.`);
-
+  const actualizarEstadoLocal = (id, estado) => {
     setSolicitudes((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, estado: 'aceptada' } : s))
+      prev.map((s) => (s.id === id ? { ...s, estado } : s))
     );
+    setConteos((prev) => {
+      const lista = solicitudes.map((s) => (s.id === id ? { ...s, estado } : s));
+      return {
+        pendientes: lista.filter((x) => x.estado === 'pendiente').length,
+        aceptadas: lista.filter((x) => x.estado === 'aceptada').length,
+        rechazadas: lista.filter((x) => x.estado === 'rechazada').length,
+        todas: lista.length,
+      };
+    });
     if (solicitudSeleccionada?.id === id) {
-      setSolicitudSeleccionada((prev) => (prev ? { ...prev, estado: 'aceptada' } : null));
+      setSolicitudSeleccionada((prev) => (prev ? { ...prev, estado } : null));
     }
   };
 
-  const handleRechazar = (id) => {
+  const handleAceptar = async (id) => {
+    try {
+      await responderSolicitud(id, 'aceptar');
+      actualizarEstadoLocal(id, 'aceptada');
+    } catch (err) {
+      alert(err?.response?.data || err?.message || 'No se pudo aceptar la solicitud.');
+    }
+  };
+
+  const handleRechazar = async (id) => {
     const confirmacion = window.confirm(`¿Estás seguro de rechazar la solicitud ${id}?`);
     if (!confirmacion) return;
-
-    console.log(`[BACKEND] Rechazando solicitud ${id} en POST /api/solicitudes/entrantes/${id}/rechazar`);
-    alert(`Solicitud ${id} rechazada.`);
-
-    setSolicitudes((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, estado: 'rechazada' } : s))
-    );
-    if (solicitudSeleccionada?.id === id) {
-      setSolicitudSeleccionada((prev) => (prev ? { ...prev, estado: 'rechazada' } : null));
+    try {
+      await responderSolicitud(id, 'rechazar');
+      actualizarEstadoLocal(id, 'rechazada');
+    } catch (err) {
+      alert(err?.response?.data || err?.message || 'No se pudo rechazar la solicitud.');
     }
   };
 
@@ -289,7 +318,7 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
                         <img src="/assets/iconos_soliU/telefono.png" alt="" />
                       </span>
                       <div className="sentr-meta-texts">
-                        <span className="sentr-meta-val">{solicitudSeleccionada.telefono || '951 123 4567'}</span>
+                        <span className="sentr-meta-val">{solicitudSeleccionada.telefono || 'Sin teléfono'}</span>
                         <span className="sentr-meta-sub">Teléfono de la institución</span>
                       </div>
                     </div>

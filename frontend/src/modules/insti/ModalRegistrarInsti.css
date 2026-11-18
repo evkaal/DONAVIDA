@@ -1,155 +1,390 @@
-/* Estilos para el Modal de Registro de Institución */
+/* Estilos para el Modal de Registro de Institución — mismo estilo Figma que
+   ModalRegistrarUsuario (max-width 650px, header, footer con 3 botones). */
 
 .mreg-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(15, 23, 42, 0.6);
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.55);
   backdrop-filter: blur(4px);
   display: flex;
-  justify-content: center;
   align-items: center;
-  z-index: 1000;
-  animation: fadeIn 0.2s ease-out;
+  justify-content: center;
+  z-index: 1050;
+  padding: 1.5rem;
+  animation: mregFadeIn 0.2s ease-out;
+  box-sizing: border-box;
 }
 
 .mreg-card {
-  background: #ffffff;
-  width: 100%;
-  max-width: 480px;
+  background-color: #ffffff;
   border-radius: 16px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  max-width: 650px;
+  max-height: 92vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  animation: scaleUp 0.2s ease-out;
+  animation: mregScaleUp 0.2s ease-out;
+  border: 1px solid #e2e8f0;
+  box-sizing: border-box;
+}
+
+.mreg-card * {
+  box-sizing: border-box;
 }
 
 .mreg-header {
-  padding: 24px 24px 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  padding: 1.75rem 2rem 1.25rem 2rem;
   border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  background-color: #ffffff;
 }
 
 .mreg-title-group h2 {
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-size: 1.35rem;
+  font-weight: 800;
   color: #0f172a;
-  margin: 0 0 4px 0;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.35rem 0;
+  line-height: 1.2;
 }
 
 .mreg-title-group p {
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   color: #64748b;
   margin: 0;
+  line-height: 1.4;
 }
 
 .mreg-close-btn {
-  background: transparent;
-  border: none;
-  font-size: 1.25rem;
-  color: #94a3b8;
-  cursor: pointer;
-  padding: 4px;
+  background: none;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
-  transition: all 0.2s;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  margin-left: 1rem;
 }
 
 .mreg-close-btn:hover {
   background-color: #f1f5f9;
   color: #0f172a;
+  border-color: #cbd5e1;
 }
 
 .mreg-body {
-  padding: 24px;
+  padding: 1.5rem 2rem;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 1.25rem;
+  background-color: #ffffff;
 }
 
 .form-group-modal {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0.4rem;
 }
 
 .form-label-modal {
-  font-size: 0.875rem;
+  font-size: 0.84rem;
   font-weight: 600;
   color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.2rem;
+}
+
+.badge-tag-modal {
+  font-size: 0.68rem;
+  font-weight: 600;
+  background-color: #f1f5f9;
+  color: #64748b;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
 }
 
 .input-field-modal {
   width: 100%;
-  padding: 10px 14px;
+  padding: 0.65rem 1rem;
+  font-size: 0.9rem;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
-  font-size: 0.95rem;
-  color: #0f172a;
+  color: #1e293b;
+  background-color: #ffffff;
+  transition: all 0.2s ease;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  box-sizing: border-box;
 }
 
 .input-field-modal:focus {
-  border-color: #ef4444; /* Tono rojizo institucional de DONAVIDA */
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+  border-color: #9e1329;
+  box-shadow: 0 0 0 3px rgba(158, 19, 41, 0.1);
+}
+
+.input-field-modal::placeholder {
+  color: #94a3b8;
+}
+
+.input-readonly-modal {
+  background-color: #f8fafc;
+  color: #64748b;
+  cursor: not-allowed;
+  border-color: #e2e8f0;
+}
+
+.input-helper-text {
+  font-size: 0.74rem;
+  color: #94a3b8;
+  margin-top: 0.25rem;
+}
+
+.select-field-modal {
+  width: 100%;
+  padding: 0.65rem 1rem;
+  font-size: 0.9rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #1e293b;
+  background-color: #ffffff;
+  outline: none;
+  cursor: pointer;
+}
+
+.select-field-modal:focus {
+  border-color: #9e1329;
+  box-shadow: 0 0 0 3px rgba(158, 19, 41, 0.1);
+}
+
+.form-row-modal {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+/* Tarjetas de tipo de institución (como las de Rol en Registrar usuario) */
+.role-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+.role-card-btn {
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.65rem 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.15s ease;
+}
+
+.role-card-btn:hover {
+  border-color: #94a3b8;
+  background-color: #f8fafc;
+}
+
+.role-card-btn.active {
+  border-color: #9e1329;
+  background-color: #fdf2f4;
+  color: #9e1329;
+  font-weight: 700;
+}
+
+.role-radio-circle {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.role-card-btn.active .role-radio-circle {
+  border-color: #9e1329;
+  background-color: #ffffff;
+}
+
+.role-radio-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #9e1329;
+}
+
+/* Toggle de estado */
+.toggle-switch-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: 42px;
+  padding: 0 0.25rem;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  cursor: pointer;
+  margin: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background-color: #cbd5e1;
+  border-radius: 24px;
+  transition: 0.2s;
+}
+
+.toggle-slider::before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #ffffff;
+  border-radius: 50%;
+  transition: 0.2s;
+}
+
+input:checked + .toggle-slider {
+  background-color: #9e1329;
+}
+
+input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+.toggle-label-text {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #334155;
+  user-select: none;
 }
 
 .mreg-footer {
-  padding: 16px 24px;
-  background-color: #f8fafc;
+  padding: 1.25rem 2rem 1.75rem 2rem;
   border-top: 1px solid #f1f5f9;
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 0.75rem;
+  background-color: #ffffff;
 }
 
 .btn-modal-cancel {
-  padding: 10px 16px;
-  background-color: transparent;
-  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
   color: #475569;
-  font-weight: 600;
+  border: 1px solid #cbd5e1;
+  padding: 0.65rem 1.25rem;
   border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.15s ease;
 }
 
 .btn-modal-cancel:hover {
-  background-color: #f1f5f9;
+  background-color: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.btn-modal-secondary {
+  background-color: #ffffff;
+  color: #1e293b;
+  border: 1px solid #cbd5e1;
+  padding: 0.65rem 1.15rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.15s ease;
+}
+
+.btn-modal-secondary:hover {
+  background-color: #f8fafc;
+  border-color: #94a3b8;
 }
 
 .btn-modal-primary {
-  padding: 10px 20px;
-  background-color: #ef4444; /* Color principal de donación/alerta */
-  border: none;
+  background-color: #9e1329;
   color: #ffffff;
-  font-weight: 600;
+  border: 1px solid #9e1329;
+  padding: 0.65rem 1.35rem;
   border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(158, 19, 41, 0.2);
 }
 
 .btn-modal-primary:hover {
-  background-color: #dc2626;
+  background-color: #830e22;
+  border-color: #830e22;
 }
 
-.btn-modal-primary:disabled {
+.btn-modal-primary:disabled,
+.btn-modal-secondary:disabled,
+.btn-modal-cancel:disabled {
   opacity: 0.7;
   cursor: not-allowed;
 }
 
-@keyframes fadeIn {
+@keyframes mregFadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
-@keyframes scaleUp {
+@keyframes mregScaleUp {
   from { transform: scale(0.95); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
+}
+
+@media (max-width: 640px) {
+  .mreg-footer {
+    flex-wrap: wrap;
+  }
+  .mreg-footer button {
+    flex: 1 1 auto;
+  }
+  .form-row-modal {
+    grid-template-columns: 1fr;
+  }
+  .role-cards-grid {
+    grid-template-columns: 1fr;
+  }
 }

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './RegistroUnidades.css';
 import ModalRegistroUnidad from './ModalRegistroUnidad';
+import { getUnidades } from '../../services/unidadesService';
 
 export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -13,16 +14,31 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
   // LISTA DE UNIDADES REGISTRADAS
   const [unidades, setUnidades] = useState([]);
 
-  const handleGuardarUnidad = (nuevaUnidad) => {
-    const unidadFormateada = {
-      folio: nuevaUnidad.codigo || nuevaUnidad.folio || 'N/D',
-      tipo: nuevaUnidad.tipoSangre || nuevaUnidad.tipo || 'O+',
-      hemocomponente: nuevaUnidad.hemocomponente || 'Concentrado eritrocitario',
-      fechaIngreso: nuevaUnidad.fechaExtraccion || nuevaUnidad.fechaIngreso || '',
-      caducidad: nuevaUnidad.fechaCaducidad || nuevaUnidad.caducidad || '',
-      estado: nuevaUnidad.estado || 'Disponible',
-    };
-    setUnidades((prev) => [unidadFormateada, ...prev]);
+  const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
+  const institucionIdSesion = usuarioSesion?.institucion_id || localStorage.getItem('institucion_id');
+
+  const cargarUnidades = async () => {
+    try {
+      const data = await getUnidades(institucionIdSesion);
+      const lista = Array.isArray(data) ? data : [];
+      setUnidades(lista.map((u) => ({
+        folio: u.folio || u.codigo || 'N/D',
+        tipo: u.tipo || u.tipoSangre || 'O+',
+        hemocomponente: u.hemocomponente || 'Concentrado eritrocitario',
+        fechaIngreso: u.fechaExtraccion || u.fechaIngreso || '',
+        caducidad: u.fechaCaducidad || u.caducidad || '',
+        estado: u.estado || 'Disponible',
+      })));
+    } catch (err) {
+      console.error("Error al cargar unidades:", err);
+    }
+  };
+
+  useEffect(() => { cargarUnidades(); }, []);
+
+  const handleGuardarUnidad = () => {
+    // El modal ya registró la unidad en la API; recargamos la tabla real.
+    cargarUnidades();
   };
 
   const unidadesFiltradas = unidades.filter((u) => {
