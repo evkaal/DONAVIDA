@@ -34,6 +34,7 @@ export const registrarSalida = async (unidadId, motivo) => {
   }
 };
 
+
 export const getUnidades = async (institucionId) => {
   try{
     const token = localStorage.getItem('token');
