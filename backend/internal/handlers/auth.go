@@ -483,6 +483,27 @@ func GetInstituciones(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(lista)
 }
 
+// findOrCreateColonia busca una colonia por (nombre, codigo_postal) y la
+// crea si no existe (la UNIQUE de colonias evita duplicados). Devuelve su id.
+func findOrCreateColonia(nombre, codigoPostal string) (int, error) {
+	var id int
+	err := database.DB.QueryRow(`
+		INSERT INTO colonias (nombre, codigo_postal) VALUES ($1, $2)
+		ON CONFLICT (nombre, codigo_postal) DO NOTHING
+		RETURNING id`, nombre, codigoPostal).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	// Ya existía (DO NOTHING no devolvió fila): buscar su id.
+	err2 := database.DB.QueryRow(
+		`SELECT id FROM colonias WHERE nombre = $1 AND codigo_postal = $2`,
+		nombre, codigoPostal).Scan(&id)
+	if err2 != nil {
+		return 0, err2
+	}
+	return id, nil
+}
+
 // RegistrarInstitucion atiende la ruta POST /api/instituciones
 func RegistrarInstitucion(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -511,6 +532,8 @@ func RegistrarInstitucion(w http.ResponseWriter, r *http.Request) {
 		Nombre            string `json:"nombre"`
 		TipoInstitucionID int    `json:"tipo_institucion_id"`
 		ColoniaID         int    `json:"colonia_id"`
+		ColoniaNombre     string `json:"colonia_nombre"`
+		CodigoPostal      string `json:"codigo_postal"`
 		Telefono          string `json:"telefono"`
 		CalleNumero       string `json:"calle_numero"`
 		Activo            *bool  `json:"activo"`
@@ -522,7 +545,45 @@ func RegistrarInstitucion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. Inserción con colonia_id incluido
+	// 3. Resolver la colonia (regla documentada):
+	// - Si viene colonia_nombre no vacío, se busca/crea una colonia con ese
+	//   nombre + código postal (ON CONFLICT no duplica) y se usa su id.
+	// - Si viene colonia_id Y codigo_postal distinto al CP almacenado de esa
+	//   colonia, NO se sobrescribe: se crea una colonia nueva con el mismo
+	//   nombre y el nuevo CP (misma lógica find-or-create) y se usa su id.
+	// - Si viene solo colonia_id, comportamiento actual.
+	coloniaID := input.ColoniaID
+	if strings.TrimSpace(input.ColoniaNombre) != "" {
+		cp := strings.TrimSpace(input.CodigoPostal)
+		if cp == "" {
+			http.Error(w, "El código postal es obligatorio para una colonia nueva", http.StatusBadRequest)
+			return
+		}
+		id, errCol := findOrCreateColonia(strings.TrimSpace(input.ColoniaNombre), cp)
+		if errCol != nil {
+			log.Printf("Error al resolver colonia nueva: %v", errCol)
+			http.Error(w, "Error al registrar la colonia: "+errCol.Error(), http.StatusInternalServerError)
+			return
+		}
+		coloniaID = id
+	} else if coloniaID != 0 && strings.TrimSpace(input.CodigoPostal) != "" {
+		var nombreCol, cpActual string
+		errCol := database.DB.QueryRow(`SELECT nombre, codigo_postal FROM colonias WHERE id = $1`, coloniaID).Scan(&nombreCol, &cpActual)
+		if errCol == nil && cpActual != strings.TrimSpace(input.CodigoPostal) {
+			id, errCol2 := findOrCreateColonia(nombreCol, strings.TrimSpace(input.CodigoPostal))
+			if errCol2 != nil {
+				log.Printf("Error al crear colonia con nuevo CP: %v", errCol2)
+				http.Error(w, "Error al registrar la colonia: "+errCol2.Error(), http.StatusInternalServerError)
+				return
+			}
+			coloniaID = id
+		}
+	}
+	if coloniaID == 0 {
+		http.Error(w, "Se requiere una colonia (colonia_id o colonia_nombre)", http.StatusBadRequest)
+		return
+	}
+
 	activo := true
 	if input.Activo != nil {
 		activo = *input.Activo
@@ -533,7 +594,7 @@ func RegistrarInstitucion(w http.ResponseWriter, r *http.Request) {
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id
 	`
-	err = database.DB.QueryRow(query, input.Nombre, input.TipoInstitucionID, input.ColoniaID, input.Telefono, input.CalleNumero, activo).Scan(&nuevoID)
+	err = database.DB.QueryRow(query, input.Nombre, input.TipoInstitucionID, coloniaID, input.Telefono, input.CalleNumero, activo).Scan(&nuevoID)
 	if err != nil {
 		log.Printf("Error al registrar institución en BD: %v", err)
 		http.Error(w, "Error al registrar la institución en la base de datos: "+err.Error(), http.StatusInternalServerError)
@@ -556,9 +617,10 @@ func GetUsuarios(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT u.id, u.nombre, u.email, 
-		       COALESCE(r.nombre, 'Sin Rol') as rol, 
-		       COALESCE(i.nombre, 'Sin Institución') as institucion, 
+		SELECT u.id, u.nombre, u.email,
+		       COALESCE(r.nombre, 'Sin Rol') as rol,
+		       COALESCE(i.nombre, 'Sin Institución') as institucion,
+		       u.institucion_id,
 		       u.estado, u.created_at
 		FROM usuarios u
 		LEFT JOIN roles r ON u.rol_id = r.id
@@ -577,9 +639,10 @@ func GetUsuarios(w http.ResponseWriter, r *http.Request) {
 		ID          int    `json:"id"`
 		Nombre      string `json:"nombre"`
 		Email       string `json:"email"`
-		Rol         string `json:"rol"`
-		Institucion string `json:"institucion"`
-		Activo      bool   `json:"activo"`
+		Rol           string `json:"rol"`
+		Institucion   string `json:"institucion"`
+		InstitucionID *int   `json:"institucion_id"`
+		Activo        bool   `json:"activo"`
 		CreatedAt   string `json:"created_at"`
 	}
 
@@ -587,7 +650,12 @@ func GetUsuarios(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var u UsuarioResponse
 		var createdAt sql.NullString // Para manejar timestamps de forma segura
-		err := rows.Scan(&u.ID, &u.Nombre, &u.Email, &u.Rol, &u.Institucion, &u.Activo, &createdAt)
+		var instID sql.NullInt64
+		err := rows.Scan(&u.ID, &u.Nombre, &u.Email, &u.Rol, &u.Institucion, &instID, &u.Activo, &createdAt)
+		if instID.Valid {
+			v := int(instID.Int64)
+			u.InstitucionID = &v
+		}
 		if err != nil {
 			log.Printf("Error escaneando usuario: %v", err)
 			continue

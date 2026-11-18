@@ -55,3 +55,13 @@ export const obtenerColonias = async () => {
     return [];
   }
 };
+
+export const obtenerRoles = async () => {
+  try {
+    const response = await api.get('/catalogos/roles');
+    return Array.isArray(response.data) ? response.data : [];
+  } catch (err) {
+    console.error("Error obteniendo roles:", err);
+    return [];
+  }
+};

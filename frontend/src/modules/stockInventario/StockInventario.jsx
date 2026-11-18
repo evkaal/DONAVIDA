@@ -44,9 +44,11 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
     cargarStock(id === '' ? 0 : id);
   };
 
-  const hospitalNombreSeleccionado = institucionesList.find(
-    (inst) => String(inst.id) === String(hospitalSeleccionado)
-  )?.nombre || usuarioSesion?.institucion || 'Hospital General';
+  const hospitalNombreSeleccionado = hospitalSeleccionado === ''
+    ? 'Todas las instituciones'
+    : (institucionesList.find(
+        (inst) => String(inst.id) === String(hospitalSeleccionado)
+      )?.nombre || usuarioSesion?.institucion || 'Sin institución');
 
   // KPIs Superiores (Conectar con endpoint)
   const [kpis, setKpis] = useState({
@@ -126,7 +128,9 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
           <section className="stock-page-header">
             <div className="stock-title-group">
               <h1>Stock de inventario</h1>
-              <p>Existencias por tipo de sangre y hemocomponente frente al mínimo configurado</p>
+              <p>{esAdminGeneral
+                ? "Existencias de toda la red, por tipo de sangre y hemocomponente"
+                : "Existencias por tipo de sangre y hemocomponente frente al mínimo configurado"}</p>
             </div>
 
             <div className="stock-header-actions">

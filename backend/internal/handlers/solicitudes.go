@@ -769,6 +769,11 @@ func GetHistorico(w http.ResponseWriter, r *http.Request) {
 	// Histórico = todas las solicitudes. El tipo es 'enviada' cuando la
 	// institución del parámetro es la solicitante y 'recibida' en caso
 	// contrario, así que no se filtra por institución en el WHERE.
+	// Regla para admin general (institucion_id = 0, sin institución propia):
+	// el tipo se calcula por el TIPO de la institución solicitante:
+	// 'enviada' si tipos_institucion.nombre es hospital o clínica
+	// (los hospitales/clínicas son quienes envían solicitudes),
+	// 'recibida' si es banco de sangre (los bancos las reciben).
 	rows, err := database.DB.Query(`
 		SELECT s.id, i.nombre AS institucion,
 		       LOWER(np.nombre) AS prioridad,
@@ -776,13 +781,20 @@ func GetHistorico(w http.ResponseWriter, r *http.Request) {
 		       TO_CHAR(s.fecha_solicitud, 'DD Mon · HH24:MI') AS solicitada,
 		       COALESCE(TO_CHAR(s.fecha_cierre, 'DD Mon · HH24:MI'), '') AS cerrada,
 		       LOWER(es.nombre) AS estado,
-		       CASE WHEN s.institucion_solicitante_id = $1 THEN 'enviada' ELSE 'recibida' END AS tipo
+		       CASE
+		         WHEN $1 <> 0 AND s.institucion_solicitante_id = $1 THEN 'enviada'
+		         WHEN $1 <> 0 THEN 'recibida'
+		         WHEN ti.nombre ILIKE '%banco%' THEN 'recibida'
+		         WHEN ti.nombre ILIKE '%hospital%' OR ti.nombre ILIKE '%clinica%' OR ti.nombre ILIKE '%clínica%' THEN 'enviada'
+		         ELSE 'recibida'
+		       END AS tipo
 		FROM solicitudes_emergencia s
 		JOIN instituciones i ON s.institucion_solicitante_id = i.id
+		JOIN tipos_institucion ti ON i.tipo_institucion_id = ti.id
 		JOIN niveles_prioridad np ON s.prioridad_id = np.id
 		JOIN estados_solicitud es ON s.estado_id = es.id
 		LEFT JOIN solicitud_detalles sd ON sd.solicitud_id = s.id
-		GROUP BY s.id, i.nombre, np.nombre, s.fecha_solicitud, s.fecha_cierre, es.nombre, s.institucion_solicitante_id
+		GROUP BY s.id, i.nombre, ti.nombre, np.nombre, s.fecha_solicitud, s.fecha_cierre, es.nombre, s.institucion_solicitante_id
 		ORDER BY s.fecha_solicitud DESC
 	`, instID)
 	if err != nil {

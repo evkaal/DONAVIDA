@@ -65,11 +65,14 @@ export default function Historico({ usuario, onCambiarModulo, onLogout }) {
   const [solicitudes, setSolicitudes] = useState([]);
 
   const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
+  const esAdminGeneral = usuarioSesion?.rol_id === 1;
   const institucionIdSesion = usuarioSesion?.institucion_id || localStorage.getItem('institucion_id');
 
   useEffect(() => {
     const cargarHistorico = async () => {
-      const data = await obtenerHistorico(institucionIdSesion);
+      // Admin general: sin institución propia -> 0 = todas las solicitudes,
+      // con tipo calculado por el tipo de institución solicitante (backend).
+      const data = await obtenerHistorico(esAdminGeneral ? 0 : institucionIdSesion);
       const lista = Array.isArray(data?.solicitudes) ? data.solicitudes : [];
       setSolicitudes(lista);
       if (data?.conteos) setConteos(data.conteos);

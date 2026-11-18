@@ -81,3 +81,12 @@ func GetHemocomponentes(w http.ResponseWriter, r *http.Request) {
 	}
 	writeCatalogo(w, `SELECT id, componente AS nombre FROM tipos_hemocomponente ORDER BY id`)
 }
+
+// GET /api/catalogos/roles
+func GetRoles(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
+	writeCatalogo(w, `SELECT id, nombre FROM roles ORDER BY id`)
+}

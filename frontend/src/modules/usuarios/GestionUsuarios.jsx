@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import "./GestionUsuarios.css";
-import { Navbar } from "../../components/layout";
+import { Sidebar, Navbar } from "../../components/layout";
 import ModalRegistrarUsuario from "./ModalRegistrarUsuario";
-import { obtenerInstituciones, obtenerUsuarios, eliminarUsuarioService } from "../../services/usuariosService";
+import { obtenerInstituciones, obtenerUsuarios, eliminarUsuarioService, obtenerRoles } from "../../services/usuariosService";
 import ModalRegistrarInstitucion from "../insti/ModalRegistrarInsti";
 
 export default function GestionUsuarios({
@@ -32,6 +32,9 @@ export default function GestionUsuarios({
   // Estado para almacenar la lista de instituciones dinámicas desde la BD
   const [institucionesList, setInstitucionesList] = useState([]);
 
+  // Roles reales de la BD (GET /api/catalogos/roles), para el filtro y el modal.
+  const [rolesList, setRolesList] = useState([]);
+
   // Cargar las instituciones reales al montar el componente
   useEffect(() => {
     obtenerInstituciones()
@@ -39,6 +42,9 @@ export default function GestionUsuarios({
       .catch((err) =>
         console.error("Error al cargar instituciones en filtros:", err),
       );
+    obtenerRoles()
+      .then((data) => setRolesList(data || []))
+      .catch((err) => console.error("Error al cargar roles en filtros:", err));
     cargarUsuarios();
   }, []);
 
@@ -60,8 +66,44 @@ export default function GestionUsuarios({
   const cuentasActivas = usuariosList.filter(u => u.activo === true).length;
   const cuentasInactivas = usuariosList.filter(u => u.activo === false).length;
 
+  // --- FILTROS APLICADOS DE VERDAD (antes existían en el state pero nunca
+  // se usaban: la tabla siempre mostraba usuariosList completo) ---
+  // filtroRol guarda el id del rol; se compara con el nombre que devuelve
+  // el backend (roles.nombre). filtroInstitucion guarda el id; si el
+  // backend no devuelve institucion_id, se compara por nombre.
+  const rolSeleccionado = rolesList.find((r) => String(r.id) === String(filtroRol));
+  const usuariosFiltrados = usuariosList.filter((u) => {
+    if (busqueda.trim() !== '') {
+      const q = busqueda.toLowerCase();
+      if (!(String(u.nombre || '').toLowerCase().includes(q) || String(u.email || '').toLowerCase().includes(q))) return false;
+    }
+    if (filtroRol !== 'todos') {
+      if (rolSeleccionado && u.rol !== rolSeleccionado.nombre) return false;
+      if (!rolSeleccionado && String(u.rol || '').toLowerCase() !== String(filtroRol).toLowerCase()) return false;
+    }
+    if (filtroInstitucion !== 'todas') {
+      if (u.institucion_id !== undefined && u.institucion_id !== null) {
+        if (String(u.institucion_id) !== String(filtroInstitucion)) return false;
+      } else {
+        const instSel = institucionesList.find((i) => String(i.id) === String(filtroInstitucion));
+        if (instSel && u.institucion !== instSel.nombre) return false;
+      }
+    }
+    if (filtroEstado !== 'todos') {
+      const quiereActivo = filtroEstado === 'Activo';
+      if (Boolean(u.activo) !== quiereActivo) return false;
+    }
+    return true;
+  });
+
   return (
     <div className="dona-page-wrapper usuarios-page-wrapper" style={{ width: '100%' }}>
+      <Sidebar
+        usuario={usuario}
+        moduloActivo="usuarios"
+        onCambiarModulo={onCambiarModulo}
+        onLogout={onLogout}
+      />
       <div className="dona-main-area usuarios-main-area" style={{ width: '100%', margin: 0 }}>
         <Navbar usuario={usuario} />
 
@@ -175,9 +217,11 @@ export default function GestionUsuarios({
                   onChange={(e) => setFiltroRol(e.target.value)}
                 >
                   <option value="todos">Rol: Todos</option>
-                  <option value="Personal medico">Personal Médico</option>
-                  <option value="Admin Institucional">Admin Institucional</option>
-                  <option value="Administrador">Administrador</option>
+                  {rolesList.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      Rol: {r.nombre}
+                    </option>
+                  ))}
                 </select>
 
                 <select
@@ -216,12 +260,12 @@ export default function GestionUsuarios({
                 <span>Acciones</span>
               </div>
 
-              {usuariosList.length === 0 ? (
+              {usuariosFiltrados.length === 0 ? (
                 <div className="usuarios-table-blank-notice">
                   <span className="usuarios-table-blank-title">No hay usuarios registrados</span>
                 </div>
               ) : (
-                usuariosList.map((u) => (
+                usuariosFiltrados.map((u) => (
                   <div className="usuarios-table-row" key={u.id} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', padding: '12px 16px', alignItems: 'center', borderBottom: '1px solid #f1f5f9' }}>
                     <span>{u.nombre}</span>
                     <span>{u.email}</span>
@@ -248,7 +292,7 @@ export default function GestionUsuarios({
             </div>
 
             <footer className="usuarios-pagination-footer">
-              <span>Mostrando {usuariosList.length} usuarios</span>
+              <span>Mostrando {usuariosFiltrados.length} de {usuariosList.length} usuarios</span>
               <div className="pagination-controls">
                 <button type="button" className="pagination-btn" disabled>‹</button>
                 <button type="button" className="pagination-btn active">1</button>

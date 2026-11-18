@@ -1,19 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import './ModalRegistrarUsuario.css';
-import { registrarUsuario, obtenerInstituciones } from '../../services/usuariosService';
+import { registrarUsuario, obtenerInstituciones, obtenerRoles } from '../../services/usuariosService';
+
+// Fallback si /catalogos/roles falla o la BD aún no tiene roles sembrados.
+// Sin duplicados: un solo registro por id.
+const ROLES_FALLBACK = [
+  { id: 1, nombre: 'Administrador general' },
+  { id: 2, nombre: 'Admin institucional' },
+  { id: 3, nombre: 'Personal médico' },
+];
 
 export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, usuarioActual }) {
   const esAdminGen = usuarioActual?.rol_id === 1;
-  const rolesDisponibles = esAdminGen
-    ? [
-        { id: 3, label: 'Personal médico' },
-        { id: 2, label: 'Admin institucional' },
-        { id: 1, label: 'Administrador general' },
-      ]
-    : [
-        { id: 3, label: 'Personal médico' },
-        { id: 2, label: 'Admin institucional' },
-      ];
+  const [rolesBd, setRolesBd] = useState([]);
+  // Roles reales de la BD; si no llegan, el fallback. Se filtra por id
+  // para no duplicar: si la BD trae un id, manda su nombre.
+  const rolesBase = rolesBd.length > 0 ? rolesBd : ROLES_FALLBACK;
+  const rolesDisponibles = rolesBase
+    .filter((r) => esAdminGen || r.id !== 1)
+    .map((r) => ({ id: r.id, label: r.nombre }))
+    .filter((r, i, arr) => arr.findIndex((x) => x.id === r.id) === i);
 
   const [nombre, setNombre] = useState('');
   const [correo, setCorreo] = useState('');
@@ -28,9 +34,12 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [mostrarConfirm, setMostrarConfirm] = useState(false);
 
-  // Cargar instituciones reales al abrir el modal
+  // Cargar roles e instituciones reales al abrir el modal
   useEffect(() => {
     if (isOpen) {
+      obtenerRoles()
+        .then((data) => { if (Array.isArray(data) && data.length > 0) setRolesBd(data); })
+        .catch((err) => console.error("Error al cargar roles:", err));
       obtenerInstituciones()
         .then(data => {
           const lista = Array.isArray(data) ? data : [];

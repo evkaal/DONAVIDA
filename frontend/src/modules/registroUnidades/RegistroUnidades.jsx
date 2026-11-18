@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './RegistroUnidades.css';
 import ModalRegistroUnidad from './ModalRegistroUnidad';
+import { Sidebar } from '../../components/layout';
 import { getUnidades } from '../../services/unidadesService';
 
 export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout }) {
@@ -54,6 +55,12 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
 
   return (
     <div className="dona-page-wrapper" style={{ width: '100%' }}>
+      <Sidebar
+        usuario={usuario}
+        moduloActivo="registro"
+        onCambiarModulo={onCambiarModulo}
+        onLogout={onLogout}
+      />
       {/* ÁREA PRINCIPAL */}
       <div className="dona-main-area" style={{ width: '100%', margin: 0 }}>
         <main className="dona-content-body">
