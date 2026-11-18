@@ -109,26 +109,143 @@ func resolveTipoSangreID(tipo string) (int, error) {
 	return id, err
 }
 
-// resolveHemocomponenteID busca por la columna `componente` (no `nombre`).
-// Primero intenta coincidencia exacta ILIKE y luego por prefijo, para cubrir
-// casos como "Plasma fresco" frente a "Plasma fresco congelado" en el catálogo.
-func resolveHemocomponenteID(nombre string) (int, error) {
-	var id int
-	err := database.DB.QueryRow(`SELECT id FROM tipos_hemocomponente WHERE componente ILIKE $1 ORDER BY LENGTH(componente) ASC LIMIT 1`, nombre).Scan(&id)
-	if err == nil {
-		return id, nil
-	}
-	err = database.DB.QueryRow(`SELECT id FROM tipos_hemocomponente WHERE componente ILIKE $1 ORDER BY LENGTH(componente) ASC LIMIT 1`, "%"+nombre+"%").Scan(&id)
-	return id, err
+// normalizarNombre deja un nombre de catálogo en forma comparable:
+// minúsculas, sin acentos, sin espacios de más. Así "Plasma fresco",
+// "PLASMA FRESCO" y "plasma fresco congelado" se pueden comparar sin
+// depender de cómo lo haya sembrado el equipo en la BD.
+var acentosReplacer = strings.NewReplacer(
+	"á", "a", "à", "a", "ä", "a", "â", "a",
+	"é", "e", "è", "e", "ë", "e", "ê", "e",
+	"í", "i", "ì", "i", "ï", "i", "î", "i",
+	"ó", "o", "ò", "o", "ö", "o", "ô", "o",
+	"ú", "u", "ù", "u", "ü", "u", "û", "u",
+	"ñ", "n", "ç", "c",
+)
+
+func normalizarNombre(s string) string {
+	s = acentosReplacer.Replace(strings.ToLower(strings.TrimSpace(s)))
+	return strings.Join(strings.Fields(s), " ")
 }
 
-// resolvePorPatron busca un id en una tabla de catálogo por nombre con ILIKE
-// usando un patrón parcial, para tolerar mayúsculas y acentos
-// ("critica" encuentra "Crítica", "urgente" encuentra "Urgente", etc.).
+// resolveHemocomponenteID busca por la columna `componente` (no `nombre`),
+// tolerando que el nombre que manda el frontend no sea idéntico al
+// sembrado en la BD. Orden: (a) coincidencia exacta normalizada;
+// (b) substring en ambas direcciones ("Plasma fresco" frente a
+// "Plasma fresco congelado" y viceversa); (c) por palabra clave
+// (eritroc / plasma / plaquet / sangre / crioprecip). Devuelve error
+// solo si nada coincide.
+func resolveHemocomponenteID(nombre string) (int, error) {
+	buscado := normalizarNombre(nombre)
+	if buscado == "" {
+		return 0, fmt.Errorf("hemocomponente vacío")
+	}
+	rows, err := database.DB.Query(`SELECT id, componente FROM tipos_hemocomponente`)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	type hemo struct {
+		id         int
+		componente string
+		norm       string
+	}
+	var catalogo []hemo
+	for rows.Next() {
+		var h hemo
+		if err := rows.Scan(&h.id, &h.componente); err != nil {
+			continue
+		}
+		h.norm = normalizarNombre(h.componente)
+		catalogo = append(catalogo, h)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	// (a) coincidencia exacta normalizada.
+	for _, h := range catalogo {
+		if h.norm == buscado {
+			return h.id, nil
+		}
+	}
+	// (b) substring en ambas direcciones.
+	for _, h := range catalogo {
+		if strings.Contains(h.norm, buscado) || strings.Contains(buscado, h.norm) {
+			return h.id, nil
+		}
+	}
+	// (c) por palabra clave. "globular" es un paquete globular, es decir,
+	// eritrocitos concentrados, y se resuelve al componente que lo contenga.
+	for _, clave := range []string{"eritroc", "crioprecip", "plaquet", "plasma", "sangre", "globular"} {
+		if strings.Contains(buscado, clave) {
+			for _, h := range catalogo {
+				if strings.Contains(h.norm, clave) {
+					return h.id, nil
+				}
+			}
+		}
+	}
+	return 0, fmt.Errorf("hemocomponente no encontrado: %s", nombre)
+}
+
+// resolvePorPatron busca un id en una tabla de catálogo por nombre,
+// tolerando mayúsculas, acentos y sufijos. Postgres ILIKE es insensible
+// a mayúsculas pero SENSIBLE a acentos ("%crit%" no casa con "Crítica"),
+// así que la comparación se hace en Go con normalizarNombre: (a) primero
+// coincidencia exacta normalizada; (b) si no hay, substring normalizado
+// en ambas direcciones. El `patron` llega como patrón LIKE con `%`
+// (ej. "%crit%"): se le quitan los `%` y se normaliza antes de comparar.
+// Devuelve el id menor entre los que casen (las filas se leen ordenadas
+// por id). Si nada casa, devuelve sql.ErrNoRows para que el llamador
+// siga devolviendo su 400 con mensaje claro.
+// Solo se aceptan las dos tablas de catálogo que usan los llamadores;
+// el nombre de tabla nunca viene del usuario (solo literales).
 func resolvePorPatron(tabla, patron string) (int, error) {
-	var id int
-	err := database.DB.QueryRow(fmt.Sprintf(`SELECT id FROM %s WHERE nombre ILIKE $1 ORDER BY id LIMIT 1`, tabla), patron).Scan(&id)
-	return id, err
+	if tabla != "niveles_prioridad" && tabla != "estados_solicitud" {
+		return 0, fmt.Errorf("tabla de catálogo no permitida: %s", tabla)
+	}
+	buscado := normalizarNombre(strings.ReplaceAll(patron, "%", ""))
+	if buscado == "" {
+		return 0, sql.ErrNoRows
+	}
+	rows, err := database.DB.Query(fmt.Sprintf(`SELECT id, nombre FROM %s ORDER BY id`, tabla))
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	// (a) coincidencia exacta normalizada (id menor primero).
+	var candidatos []struct {
+		id   int
+		norm string
+	}
+	for rows.Next() {
+		var c struct {
+			id   int
+			norm string
+		}
+		var nombre string
+		if err := rows.Scan(&c.id, &nombre); err != nil {
+			continue
+		}
+		c.norm = normalizarNombre(nombre)
+		candidatos = append(candidatos, c)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	for _, c := range candidatos {
+		if c.norm == buscado {
+			return c.id, nil
+		}
+	}
+	// (b) substring normalizado en ambas direcciones: "%crit%" casa con
+	// "Crítica" (critica), "%pendient%" con "Pendiente", "%acept%" con
+	// "Aceptada", "%rechaz%" con "Rechazada", "%normal%" con "Normal".
+	for _, c := range candidatos {
+		if strings.Contains(c.norm, buscado) || strings.Contains(buscado, c.norm) {
+			return c.id, nil
+		}
+	}
+	return 0, sql.ErrNoRows
 }
 
 // ---------------------------------------------------------------------------
@@ -235,12 +352,16 @@ const diasCaducidadStock = 7
 
 // columnaHemo clasifica un componente del catálogo en una de las 4 columnas
 // de la matriz. Devuelve "" si no pertenece a ninguna.
+// "Paquete globular" es eritrocitos concentrados (el mismo producto que
+// el concentrado eritrocitario), así que se clasifica como tal: sin este
+// mapeo las unidades guardadas como "Paquete globular" eran invisibles
+// en la matriz aunque existieran en la BD.
 func columnaHemo(componente string) string {
 	c := strings.ToLower(componente)
 	switch {
 	case strings.Contains(c, "sangre total"):
 		return "sangreTotal"
-	case strings.Contains(c, "eritrocitario") || strings.Contains(c, "eritrocito"):
+	case strings.Contains(c, "eritrocitario") || strings.Contains(c, "eritrocito") || strings.Contains(c, "globular"):
 		return "concEritrocitario"
 	case strings.Contains(c, "plasma"):
 		return "plasmaFresco"
@@ -279,6 +400,21 @@ func GetStock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	const diasCaducidad = diasCaducidadStock
+
+	// Total REAL de unidades disponibles de la institución (COUNT separado):
+	// una unidad cuyo componente no se pueda clasificar en la matriz
+	// (columnaHemo == "") nunca debe volverse invisible en el total.
+	// Antes este KPI era la suma de la matriz, así que las unidades
+	// guardadas con un tipo no mapeable no se contaban en ningún lado.
+	totalDisponibles := 0
+	if err := database.DB.QueryRow(`
+		SELECT COUNT(h.id)
+		FROM hemocomponentes h
+		JOIN estados_hemocomponente eh ON h.estado_id = eh.id AND eh.nombre ILIKE 'disponible'
+		WHERE ($1 = 0 OR h.institucion_id = $1)
+	`, instID).Scan(&totalDisponibles); err != nil {
+		log.Printf("Error al contar unidades disponibles: %v", err)
+	}
 
 	// 1. Tipos de sangre (orden fijo A+, A-, B+, B-, AB+, AB-, O+, O-)
 	tipoIDs := map[string]int{}
@@ -355,7 +491,7 @@ func GetStock(w http.ResponseWriter, r *http.Request) {
 	matriz := []filaMatriz{}
 	totales := map[string]int{"sangreTotal": 0, "concEritrocitario": 0, "plasmaFresco": 0, "plaquetas": 0, "granTotal": 0}
 	cols := []string{"sangreTotal", "concEritrocitario", "plasmaFresco", "plaquetas"}
-	var unidadesDisponibles, tiposConExistencia, bajoMinimo, sinExistencias int
+	var tiposConExistencia, bajoMinimo, sinExistencias int
 	var detalleSin []string
 	alertas := []alertaStock{}
 	alertaID := 1
@@ -389,7 +525,6 @@ func GetStock(w http.ResponseWriter, r *http.Request) {
 			fila.Total += cant
 			totales[col] += cant
 			totales["granTotal"] += cant
-			unidadesDisponibles += cant
 			if cant > 0 {
 				tiposConStock[tipo] = true
 			}
@@ -469,7 +604,7 @@ func GetStock(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"kpis": map[string]interface{}{
-			"unidadesDisponibles":   unidadesDisponibles,
+			"unidadesDisponibles":   totalDisponibles,
 			"tiposConExistencia":    tiposConExistencia,
 			"bajoMinimo":            bajoMinimo,
 			"totalCombinaciones":    len(ordenTiposSangre) * len(cols),
@@ -772,11 +907,24 @@ func GetSolicitudesEntrantes(w http.ResponseWriter, r *http.Request) {
 
 // ---------------------------------------------------------------------------
 // POST /api/solicitudes/entrantes/{id}/aceptar | /rechazar
+// Solo el administrador institucional (rol_id 2) puede responder
+// solicitudes entrantes: es quien atiende los requerimientos de su
+// institución. El personal médico (rol_id 3) las ve en solo lectura y
+// el admin general (rol_id 1) no atiende solicitudes de instituciones.
 // ---------------------------------------------------------------------------
 
 func ResponderSolicitud(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
+	sesion, ok := sesionDesdeToken(r)
+	if !ok {
+		http.Error(w, "Token de autorización requerido", http.StatusUnauthorized)
+		return
+	}
+	if sesion.RolID != 2 {
+		http.Error(w, "Solo el administrador institucional puede responder solicitudes entrantes", http.StatusForbidden)
 		return
 	}
 	// Ruta: /api/solicitudes/entrantes/SOL-0001/aceptar (o id numérico).

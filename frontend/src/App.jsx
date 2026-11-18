@@ -30,8 +30,19 @@ function App() {
     return <Login onLoginSuccess={(datosUsuario) => setUsuario(datosUsuario)} />;
   }
 
-  // Módulo: Gestión de Usuarios (Admin)
+  // Módulo: Gestión de Usuarios (Admin). El personal médico (rol_id 3)
+  // no puede crear ni gestionar usuarios: si llega aquí por estado viejo,
+  // se le muestra el Dashboard en vez del módulo.
   if (moduloApp === 'usuarios') {
+    if (Number(usuario?.rol_id) === 3) {
+      return (
+        <Dashboard
+          usuario={usuario}
+          onLogout={handleLogout}
+          onCambiarModulo={setModuloApp}
+        />
+      );
+    }
     return (
       <GestionUsuarios
         usuario={usuario}

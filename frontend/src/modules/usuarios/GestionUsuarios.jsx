@@ -11,7 +11,12 @@ export default function GestionUsuarios({
   onLogout,
 }) {
   const userState = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
-  const esAdminGeneral = userState?.rol_id === 1;
+  // rol_id puede venir como número o como string: se normaliza con Number.
+  const rolNumerico = Number(userState?.rol_id);
+  const esAdminGeneral = rolNumerico === 1;
+  // El personal médico (rol_id 3) NO puede crear ni gestionar usuarios.
+  const esMedico = rolNumerico === 3;
+  const puedeCrearUsuarios = rolNumerico === 1 || rolNumerico === 2;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModalInstOpen, setIsModalInstOpen] = useState(false);
@@ -35,8 +40,11 @@ export default function GestionUsuarios({
   // Roles reales de la BD (GET /api/catalogos/roles), para el filtro y el modal.
   const [rolesList, setRolesList] = useState([]);
 
-  // Cargar las instituciones reales al montar el componente
+  // Cargar las instituciones reales al montar el componente.
+  // El personal médico no llega a esta pantalla (ver aviso abajo) y el
+  // backend le devuelve 403, así que ni siquiera se cargan los datos.
   useEffect(() => {
+    if (esMedico) return;
     obtenerInstituciones()
       .then((data) => setInstitucionesList(data || []))
       .catch((err) =>
@@ -96,6 +104,42 @@ export default function GestionUsuarios({
     return true;
   });
 
+  // El personal médico (rol_id 3) no puede crear ni gestionar usuarios:
+  // si llega a esta pantalla, ve el aviso en vez de la tabla y los botones.
+  // (El Sidebar ya no le muestra la opción y App.jsx tampoco lo deja entrar;
+  // esto es la última defensa si llega por estado viejo.)
+  if (esMedico) {
+    return (
+      <div className="dona-page-wrapper usuarios-page-wrapper" style={{ width: '100%' }}>
+        <Sidebar
+          usuario={usuario}
+          moduloActivo="usuarios"
+          onCambiarModulo={onCambiarModulo}
+          onLogout={onLogout}
+        />
+        <div className="dona-main-area usuarios-main-area" style={{ width: '100%', margin: 0 }}>
+          <Navbar usuario={usuario} />
+          <main className="dona-content-body usuarios-content-body">
+            <section className="usuarios-page-header">
+              <div className="usuarios-title-group">
+                <h1>Gestión de usuarios</h1>
+                <p>
+                  Administra las cuentas del personal de hospitales y bancos de sangre
+                </p>
+              </div>
+            </section>
+            <div className="usuarios-table-blank-notice">
+              <span className="usuarios-table-blank-title">No tienes permiso para gestionar usuarios</span>
+              <span style={{ display: 'block', color: '#64748b', fontSize: '0.9rem', marginTop: '4px' }}>
+                Solo los administradores pueden ver y crear cuentas de usuario.
+              </span>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="dona-page-wrapper usuarios-page-wrapper" style={{ width: '100%' }}>
       <Sidebar
@@ -132,20 +176,22 @@ export default function GestionUsuarios({
                 </button>
               )}
 
-              {/* BOTÓN DE REGISTRAR USUARIO */}
-              <button
-                type="button"
-                className="btn-open-modal-register"
-                onClick={() => setIsModalOpen(true)}
-              >
-                <span>
-                  <img
-                    src="/assets/iconos_gestionU/agregar-usuario.png"
-                    alt="DONAVIDA"
-                  />
-                </span>
-                <span>Registrar usuario</span>
-              </button>
+              {/* BOTÓN DE REGISTRAR USUARIO (solo administradores, rol 1 y 2) */}
+              {puedeCrearUsuarios && (
+                <button
+                  type="button"
+                  className="btn-open-modal-register"
+                  onClick={() => setIsModalOpen(true)}
+                >
+                  <span>
+                    <img
+                      src="/assets/iconos_gestionU/agregar-usuario.png"
+                      alt="DONAVIDA"
+                    />
+                  </span>
+                  <span>Registrar usuario</span>
+                </button>
+              )}
             </div>
           </section>
 

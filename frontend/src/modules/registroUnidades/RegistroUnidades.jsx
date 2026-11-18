@@ -3,6 +3,7 @@ import './RegistroUnidades.css';
 import ModalRegistroUnidad from './ModalRegistroUnidad';
 import { Sidebar } from '../../components/layout';
 import { getUnidades } from '../../services/unidadesService';
+import { obtenerHemocomponentes, obtenerTiposSangre } from '../../services/catalogosService';
 
 export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -14,6 +15,23 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
 
   // LISTA DE UNIDADES REGISTRADAS
   const [unidades, setUnidades] = useState([]);
+
+  // Opciones de los filtros: del catálogo real de la BD, no hardcodeadas.
+  // Si el catálogo falla, los filtros solo muestran la opción "todos".
+  const [hemos, setHemos] = useState([]);
+  const [tiposSangre, setTiposSangre] = useState([]);
+
+  useEffect(() => {
+    let cancelado = false;
+    Promise.all([obtenerHemocomponentes(), obtenerTiposSangre()])
+      .then(([h, t]) => {
+        if (cancelado) return;
+        setHemos(h.map((x) => x.nombre).filter(Boolean));
+        setTiposSangre(t.map((x) => x.nombre).filter(Boolean));
+      })
+      .catch((err) => console.error("Error al cargar catálogos:", err));
+    return () => { cancelado = true; };
+  }, []);
 
   const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
   // La institución es solo la de la sesión (del JWT/login). Sin fallback a
@@ -33,8 +51,8 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
       const lista = Array.isArray(data) ? data : [];
       setUnidades(lista.map((u) => ({
         folio: u.folio || u.codigo || 'N/D',
-        tipo: u.tipo || u.tipoSangre || 'O+',
-        hemocomponente: u.hemocomponente || 'Concentrado eritrocitario',
+        tipo: u.tipo || u.tipoSangre || '',
+        hemocomponente: u.hemocomponente || '',
         fechaIngreso: u.fechaExtraccion || u.fechaIngreso || '',
         caducidad: u.fechaCaducidad || u.caducidad || '',
         estado: u.estado || 'Disponible',
@@ -123,25 +141,18 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
                 <div className="reg-custom-select-wrapper">
                   <select className="reg-filter-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
                     <option value="todos">Tipo sanguíneo</option>
-                    <option value="A+">A+</option>
-                    <option value="A-">A-</option>
-                    <option value="B+">B+</option>
-                    <option value="B-">B-</option>
-                    <option value="AB+">AB+</option>
-                    <option value="AB-">AB-</option>
-                    <option value="O+">O+</option>
-                    <option value="O-">O-</option>
+                    {tiposSangre.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
                   </select>
                 </div>
 
                 <div className="reg-custom-select-wrapper">
                   <select className="reg-filter-select" value={filtroHemo} onChange={(e) => setFiltroHemo(e.target.value)}>
                     <option value="todos">Hemocomponente</option>
-                    <option value="Concentrado eritrocitario">Concentrado eritrocitario</option>
-                    <option value="Sangre total">Sangre total</option>
-                    <option value="Plaquetas">Plaquetas</option>
-                    <option value="Plasma fresco">Plasma fresco</option>
-                    <option value="Crioprecipitado">Crioprecipitado</option>
+                    {hemos.map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
                   </select>
                 </div>
 

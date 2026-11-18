@@ -293,6 +293,36 @@
   background-color: #dc2626;
 }
 
+.badge-completada {
+  background-color: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #dcfce7;
+}
+
+.dot-completada {
+  background-color: #16a34a;
+}
+
+.badge-cancelada {
+  background-color: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.dot-cancelada {
+  background-color: #64748b;
+}
+
+.badge-desconocido {
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.dot-desconocido {
+  background-color: #94a3b8;
+}
+
 /* Estado vacío en tabla */
 .sentr-table-empty-cell {
   padding: 3.5rem 1rem !important;
@@ -595,6 +625,12 @@
   background-color: #fef2f2;
   color: #991b1b;
   border: 1px solid #fecdd3;
+}
+
+.notice-solo-lectura {
+  background-color: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
 }
 
 /* Estado vacío en panel de detalle */
