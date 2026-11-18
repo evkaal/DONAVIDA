@@ -1,5 +1,9 @@
 import api from './api';
 
+
+
+
+
 export const registrarUnidad = async (unidadData) => {
   try {
     const token = localStorage.getItem('token');
@@ -45,4 +49,9 @@ export const getUnidades = async (institucionId) => {
     throw error;
   }
 };
+
+
+
+
+
 
