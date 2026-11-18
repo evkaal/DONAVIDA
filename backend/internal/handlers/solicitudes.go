@@ -109,17 +109,82 @@ func resolveTipoSangreID(tipo string) (int, error) {
 	return id, err
 }
 
-// resolveHemocomponenteID busca por la columna `componente` (no `nombre`).
-// Primero intenta coincidencia exacta ILIKE y luego por prefijo, para cubrir
-// casos como "Plasma fresco" frente a "Plasma fresco congelado" en el catálogo.
+// normalizarNombre deja un nombre de catálogo en forma comparable:
+// minúsculas, sin acentos, sin espacios de más. Así "Plasma fresco",
+// "PLASMA FRESCO" y "plasma fresco congelado" se pueden comparar sin
+// depender de cómo lo haya sembrado el equipo en la BD.
+var acentosReplacer = strings.NewReplacer(
+	"á", "a", "à", "a", "ä", "a", "â", "a",
+	"é", "e", "è", "e", "ë", "e", "ê", "e",
+	"í", "i", "ì", "i", "ï", "i", "î", "i",
+	"ó", "o", "ò", "o", "ö", "o", "ô", "o",
+	"ú", "u", "ù", "u", "ü", "u", "û", "u",
+	"ñ", "n", "ç", "c",
+)
+
+func normalizarNombre(s string) string {
+	s = acentosReplacer.Replace(strings.ToLower(strings.TrimSpace(s)))
+	return strings.Join(strings.Fields(s), " ")
+}
+
+// resolveHemocomponenteID busca por la columna `componente` (no `nombre`),
+// tolerando que el nombre que manda el frontend no sea idéntico al
+// sembrado en la BD. Orden: (a) coincidencia exacta normalizada;
+// (b) substring en ambas direcciones ("Plasma fresco" frente a
+// "Plasma fresco congelado" y viceversa); (c) por palabra clave
+// (eritroc / plasma / plaquet / sangre / crioprecip). Devuelve error
+// solo si nada coincide.
 func resolveHemocomponenteID(nombre string) (int, error) {
-	var id int
-	err := database.DB.QueryRow(`SELECT id FROM tipos_hemocomponente WHERE componente ILIKE $1 ORDER BY LENGTH(componente) ASC LIMIT 1`, nombre).Scan(&id)
-	if err == nil {
-		return id, nil
+	buscado := normalizarNombre(nombre)
+	if buscado == "" {
+		return 0, fmt.Errorf("hemocomponente vacío")
 	}
-	err = database.DB.QueryRow(`SELECT id FROM tipos_hemocomponente WHERE componente ILIKE $1 ORDER BY LENGTH(componente) ASC LIMIT 1`, "%"+nombre+"%").Scan(&id)
-	return id, err
+	rows, err := database.DB.Query(`SELECT id, componente FROM tipos_hemocomponente`)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	type hemo struct {
+		id         int
+		componente string
+		norm       string
+	}
+	var catalogo []hemo
+	for rows.Next() {
+		var h hemo
+		if err := rows.Scan(&h.id, &h.componente); err != nil {
+			continue
+		}
+		h.norm = normalizarNombre(h.componente)
+		catalogo = append(catalogo, h)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	// (a) coincidencia exacta normalizada.
+	for _, h := range catalogo {
+		if h.norm == buscado {
+			return h.id, nil
+		}
+	}
+	// (b) substring en ambas direcciones.
+	for _, h := range catalogo {
+		if strings.Contains(h.norm, buscado) || strings.Contains(buscado, h.norm) {
+			return h.id, nil
+		}
+	}
+	// (c) por palabra clave. "globular" es un paquete globular, es decir,
+	// eritrocitos concentrados, y se resuelve al componente que lo contenga.
+	for _, clave := range []string{"eritroc", "crioprecip", "plaquet", "plasma", "sangre", "globular"} {
+		if strings.Contains(buscado, clave) {
+			for _, h := range catalogo {
+				if strings.Contains(h.norm, clave) {
+					return h.id, nil
+				}
+			}
+		}
+	}
+	return 0, fmt.Errorf("hemocomponente no encontrado: %s", nombre)
 }
 
 // resolvePorPatron busca un id en una tabla de catálogo por nombre con ILIKE
@@ -235,12 +300,16 @@ const diasCaducidadStock = 7
 
 // columnaHemo clasifica un componente del catálogo en una de las 4 columnas
 // de la matriz. Devuelve "" si no pertenece a ninguna.
+// "Paquete globular" es eritrocitos concentrados (el mismo producto que
+// el concentrado eritrocitario), así que se clasifica como tal: sin este
+// mapeo las unidades guardadas como "Paquete globular" eran invisibles
+// en la matriz aunque existieran en la BD.
 func columnaHemo(componente string) string {
 	c := strings.ToLower(componente)
 	switch {
 	case strings.Contains(c, "sangre total"):
 		return "sangreTotal"
-	case strings.Contains(c, "eritrocitario") || strings.Contains(c, "eritrocito"):
+	case strings.Contains(c, "eritrocitario") || strings.Contains(c, "eritrocito") || strings.Contains(c, "globular"):
 		return "concEritrocitario"
 	case strings.Contains(c, "plasma"):
 		return "plasmaFresco"
@@ -279,6 +348,21 @@ func GetStock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	const diasCaducidad = diasCaducidadStock
+
+	// Total REAL de unidades disponibles de la institución (COUNT separado):
+	// una unidad cuyo componente no se pueda clasificar en la matriz
+	// (columnaHemo == "") nunca debe volverse invisible en el total.
+	// Antes este KPI era la suma de la matriz, así que las unidades
+	// guardadas con un tipo no mapeable no se contaban en ningún lado.
+	totalDisponibles := 0
+	if err := database.DB.QueryRow(`
+		SELECT COUNT(h.id)
+		FROM hemocomponentes h
+		JOIN estados_hemocomponente eh ON h.estado_id = eh.id AND eh.nombre ILIKE 'disponible'
+		WHERE ($1 = 0 OR h.institucion_id = $1)
+	`, instID).Scan(&totalDisponibles); err != nil {
+		log.Printf("Error al contar unidades disponibles: %v", err)
+	}
 
 	// 1. Tipos de sangre (orden fijo A+, A-, B+, B-, AB+, AB-, O+, O-)
 	tipoIDs := map[string]int{}
@@ -355,7 +439,7 @@ func GetStock(w http.ResponseWriter, r *http.Request) {
 	matriz := []filaMatriz{}
 	totales := map[string]int{"sangreTotal": 0, "concEritrocitario": 0, "plasmaFresco": 0, "plaquetas": 0, "granTotal": 0}
 	cols := []string{"sangreTotal", "concEritrocitario", "plasmaFresco", "plaquetas"}
-	var unidadesDisponibles, tiposConExistencia, bajoMinimo, sinExistencias int
+	var tiposConExistencia, bajoMinimo, sinExistencias int
 	var detalleSin []string
 	alertas := []alertaStock{}
 	alertaID := 1
@@ -389,7 +473,6 @@ func GetStock(w http.ResponseWriter, r *http.Request) {
 			fila.Total += cant
 			totales[col] += cant
 			totales["granTotal"] += cant
-			unidadesDisponibles += cant
 			if cant > 0 {
 				tiposConStock[tipo] = true
 			}
@@ -469,7 +552,7 @@ func GetStock(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"kpis": map[string]interface{}{
-			"unidadesDisponibles":   unidadesDisponibles,
+			"unidadesDisponibles":   totalDisponibles,
 			"tiposConExistencia":    tiposConExistencia,
 			"bajoMinimo":            bajoMinimo,
 			"totalCombinaciones":    len(ordenTiposSangre) * len(cols),

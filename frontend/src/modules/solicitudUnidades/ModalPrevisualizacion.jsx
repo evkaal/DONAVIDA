@@ -5,6 +5,8 @@ export default function ModalPrevisualizacion({
   isOpen,
   onClose,
   solicitud,
+  hemocomponentes = [],
+  tiposSangre = [],
   onUpdateUnidad,
   onAgregarUnidad,
   onEliminarUnidad,
@@ -12,6 +14,14 @@ export default function ModalPrevisualizacion({
   enviando = false
 }) {
   if (!isOpen) return null;
+
+  // Opciones del catálogo real de la BD. Si un renglón trae un valor que
+  // no está en el catálogo, se conserva como opción para no dejar el
+  // select en blanco (nunca se inventa una lista hardcodeada).
+  const opcionesPara = (valor, lista) => {
+    if (lista.includes(valor)) return lista;
+    return valor ? [valor, ...lista] : lista;
+  };
 
   const {
     institucion,
@@ -138,36 +148,29 @@ export default function ModalPrevisualizacion({
               {unidades.length > 0 ? (
                 unidades.map((u) => (
                   <div key={u.id} className="mprev-unit-row">
-                    {/* Selector de Tipo */}
+                    {/* Selector de Tipo (catálogo real de la BD) */}
                     <div className="mprev-select-wrapper col-tipo">
                       <select
                         className="mprev-select"
                         value={u.tipo}
                         onChange={(e) => onUpdateUnidad(u.id, 'tipo', e.target.value)}
                       >
-                        <option value="A+">A+</option>
-                        <option value="A-">A-</option>
-                        <option value="B+">B+</option>
-                        <option value="B-">B-</option>
-                        <option value="AB+">AB+</option>
-                        <option value="AB-">AB-</option>
-                        <option value="O+">O+</option>
-                        <option value="O-">O-</option>
+                        {opcionesPara(u.tipo, tiposSangre).map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
                       </select>
                     </div>
 
-                    {/* Selector de Hemocomponente */}
+                    {/* Selector de Hemocomponente (catálogo real de la BD) */}
                     <div className="mprev-select-wrapper col-hemo">
                       <select
                         className="mprev-select"
                         value={u.hemocomponente}
                         onChange={(e) => onUpdateUnidad(u.id, 'hemocomponente', e.target.value)}
                       >
-                        <option value="Concentrado eritrocitario">Concentrado eritrocitario</option>
-                        <option value="Plaquetas">Plaquetas</option>
-                        <option value="Plasma fresco">Plasma fresco</option>
-                        <option value="Sangre total">Sangre total</option>
-                        <option value="Crioprecipitado">Crioprecipitado</option>
+                        {opcionesPara(u.hemocomponente, hemocomponentes).map((h) => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
                       </select>
                     </div>
 

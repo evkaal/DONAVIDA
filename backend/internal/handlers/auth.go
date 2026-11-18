@@ -465,23 +465,19 @@ func RegistrarUnidad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Obtener el ID del tipo de hemocomponente por su columna `componente`
-	// (no `nombre`): primero exacto, luego por patrón ("Plasma fresco"
-	// encuentra "Plasma fresco congelado").
-	var tipoHemocomponenteID int
-	err = database.DB.QueryRow(`
-		SELECT id FROM tipos_hemocomponente WHERE componente ILIKE $1 ORDER BY LENGTH(componente) ASC LIMIT 1
-	`, input.Hemocomponente).Scan(&tipoHemocomponenteID)
+	// 2. Obtener el ID del tipo de hemocomponente con la lógica compartida
+	// (resolveHemocomponenteID, tolerante a acentos, mayúsculas y nombres
+	// parciales). SIN fallback silencioso a un id arbitrario: si no se
+	// resuelve, la unidad NO se guarda, porque antes se guardaba con el
+	// tipo equivocado y el stock no la contaba en ninguna columna.
+	tipoHemocomponenteID, err := resolveHemocomponenteID(input.Hemocomponente)
 	if err != nil {
-		err = database.DB.QueryRow(`
-			SELECT id FROM tipos_hemocomponente WHERE componente ILIKE $1 ORDER BY LENGTH(componente) ASC LIMIT 1
-		`, "%"+input.Hemocomponente+"%").Scan(&tipoHemocomponenteID)
-	}
-	if err != nil {
-		tipoHemocomponenteID = 1
+		http.Error(w, "Hemocomponente no válido: "+input.Hemocomponente, http.StatusBadRequest)
+		return
 	}
 
-	// 3. Obtener el ID del estado (ej. "Disponible"; vacío = Disponible)
+	// 3. Obtener el ID del estado (ej. "Disponible"; vacío = Disponible).
+	// SIN fallback silencioso: si no existe en estados_hemocomponente, error.
 	estadoNombre := strings.TrimSpace(input.Estado)
 	if estadoNombre == "" {
 		estadoNombre = "Disponible"
@@ -491,7 +487,8 @@ func RegistrarUnidad(w http.ResponseWriter, r *http.Request) {
 		SELECT id FROM estados_hemocomponente WHERE nombre ILIKE $1
 	`, estadoNombre).Scan(&estadoID)
 	if err != nil {
-		estadoID = 1
+		http.Error(w, "Estado no válido: "+estadoNombre, http.StatusBadRequest)
+		return
 	}
 
 	// 4. Insertar en hemocomponentes con el código generado por el servidor

@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import './ModalRegistroUnidad.css';
 import { registrarUnidad } from '../../services/unidadesService';
+import { obtenerHemocomponentes, obtenerTiposSangre } from '../../services/catalogosService';
 
-// Catálogo de hemocomponentes con su vigencia y volumen por defecto
+// Catálogo de hemocomponentes con su vigencia y volumen por defecto.
+// Las CLAVES son solo la referencia para vigencia/volumen: el select de
+// hemocomponentes se llena con el catálogo real de la BD y la búsqueda
+// aquí es NORMALIZADA (minúsculas, sin acentos), con defaults si el
+// nombre de la BD no está en este mapa.
 const HEMOCOMPONENTES_CATALOGO = {
   'Concentrado eritrocitario': { vigenciaDias: 42, volumenDefault: '300 ml' },
   'Sangre total': { vigenciaDias: 35, volumenDefault: '450 ml' },
@@ -11,7 +16,38 @@ const HEMOCOMPONENTES_CATALOGO = {
   'Crioprecipitado': { vigenciaDias: 365, volumenDefault: '150 ml' },
 };
 
-const TIPOS_SANGUINEOS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+// Normaliza un nombre para compararlo sin depender de acentos,
+// mayúsculas ni espacios de más ("Plasma Fresco" == "plasma fresco").
+const normalizar = (s) => (s || '')
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[̀-ͯ]/g, '')
+  .trim()
+  .replace(/\s+/g, ' ');
+
+// Busca vigencia/volumen para el nombre que venga de la BD. Si no está
+// en el mapa, defaults (35 días / 450 ml): nunca se rompe el flujo por
+// un nombre de catálogo distinto al esperado.
+const buscarConfigHemo = (nombre) => {
+  const n = normalizar(nombre);
+  if (!n) return null;
+  for (const [clave, cfg] of Object.entries(HEMOCOMPONENTES_CATALOGO)) {
+    if (normalizar(clave) === n) return cfg;
+  }
+  for (const [clave, cfg] of Object.entries(HEMOCOMPONENTES_CATALOGO)) {
+    const k = normalizar(clave);
+    if (k.includes(n) || n.includes(k)) return cfg;
+  }
+  if (n.includes('eritroc')) return HEMOCOMPONENTES_CATALOGO['Concentrado eritrocitario'];
+  if (n.includes('globular')) return HEMOCOMPONENTES_CATALOGO['Concentrado eritrocitario'];
+  if (n.includes('plaquet')) return HEMOCOMPONENTES_CATALOGO['Plaquetas'];
+  if (n.includes('plasma')) return HEMOCOMPONENTES_CATALOGO['Plasma fresco congelado'];
+  if (n.includes('sangre')) return HEMOCOMPONENTES_CATALOGO['Sangre total'];
+  if (n.includes('crioprecip')) return HEMOCOMPONENTES_CATALOGO['Crioprecipitado'];
+  return null;
+};
+
+const configHemo = (nombre) => buscarConfigHemo(nombre) || { vigenciaDias: 35, volumenDefault: '450 ml' };
 
 // Fecha de hoy en formato YYYY-MM-DD (la fecha de extracción por defecto
 // ya no es una fecha fija del pasado).
@@ -31,14 +67,21 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
   // La institución es la de la sesión; si el usuario no tiene, se muestra
   // "Sin institución" (nunca se inventa una por defecto).
   const institucionDefecto = usuario?.institucion || 'Sin institución';
-  const [tipoSangre, setTipoSangre] = useState('O+');
-  const [hemocomponente, setHemocomponente] = useState('Concentrado eritrocitario');
+  const [tipoSangre, setTipoSangre] = useState('');
+  const [hemocomponente, setHemocomponente] = useState('');
   const [volumen, setVolumen] = useState('300 ml');
   const [vigenciaDias, setVigenciaDias] = useState(42);
   const [fechaExtraccion, setFechaExtraccion] = useState(hoyISO());
   const [fechaCaducidad, setFechaCaducidad] = useState(() => sumarDiasISO(hoyISO(), 42));
   const [cargando, setCargando] = useState(false);
   const [mensajeExito, setMensajeExito] = useState('');
+
+  // Catálogos reales de la BD. Sin lista hardcodeada: si el catálogo
+  // falla o viene vacío, se muestra el error y no se puede registrar.
+  const [hemos, setHemos] = useState([]);
+  const [tiposSangre, setTiposSangre] = useState([]);
+  const [cargandoCatalogos, setCargandoCatalogos] = useState(true);
+  const [errorCatalogo, setErrorCatalogo] = useState('');
 
   // Al abrir el modal, las fechas vuelven a hoy (con su vigencia) y se
   // limpia el mensaje de éxito anterior.
@@ -52,24 +95,61 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
+  // Cargar los catálogos reales al abrir el modal.
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelado = false;
+    setCargandoCatalogos(true);
+    setErrorCatalogo('');
+    Promise.all([obtenerHemocomponentes(), obtenerTiposSangre()])
+      .then(([h, t]) => {
+        if (cancelado) return;
+        const nombresH = h.map((x) => x.nombre).filter(Boolean);
+        const nombresT = t.map((x) => x.nombre).filter(Boolean);
+        if (nombresH.length === 0 || nombresT.length === 0) {
+          setErrorCatalogo('No se pudo cargar el catálogo de hemocomponentes o de tipos de sangre.');
+        }
+        setHemos(nombresH);
+        setTiposSangre(nombresT);
+      })
+      .catch(() => {
+        if (!cancelado) setErrorCatalogo('No se pudo cargar el catálogo de hemocomponentes. Revisa tu conexión e inténtalo de nuevo.');
+      })
+      .finally(() => {
+        if (!cancelado) setCargandoCatalogos(false);
+      });
+    return () => { cancelado = true; };
+  }, [isOpen]);
+
+  // Si la selección actual no está en el catálogo cargado, se ajusta al
+  // primer valor válido (con su vigencia y volumen correspondientes).
+  useEffect(() => {
+    if (cargandoCatalogos || errorCatalogo || hemos.length === 0) return;
+    if (!hemos.includes(hemocomponente)) {
+      handleCambioHemocomponente(hemos[0]);
+    }
+    if (tiposSangre.length > 0 && !tiposSangre.includes(tipoSangre)) {
+      setTipoSangre(tiposSangre[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hemos, tiposSangre, cargandoCatalogos, errorCatalogo]);
+
   // Actualizar vigencia y volumen sugerido al cambiar el hemocomponente
   const handleCambioHemocomponente = (nuevoHemo) => {
     setHemocomponente(nuevoHemo);
-    const config = HEMOCOMPONENTES_CATALOGO[nuevoHemo];
-    if (config) {
-      setVigenciaDias(config.vigenciaDias);
-      setVolumen(config.volumenDefault);
+    const config = configHemo(nuevoHemo);
+    setVigenciaDias(config.vigenciaDias);
+    setVolumen(config.volumenDefault);
 
-      // Recalcular fecha de caducidad si hay fecha de extracción válida
-      if (fechaExtraccion) {
-        const fecha = new Date(fechaExtraccion);
-        if (!isNaN(fecha.getTime())) {
-          fecha.setDate(fecha.getDate() + config.vigenciaDias);
-          const yyyy = fecha.getFullYear();
-          const mm = String(fecha.getMonth() + 1).padStart(2, '0');
-          const dd = String(fecha.getDate()).padStart(2, '0');
-          setFechaCaducidad(`${yyyy}-${mm}-${dd}`);
-        }
+    // Recalcular fecha de caducidad si hay fecha de extracción válida
+    if (fechaExtraccion) {
+      const fecha = new Date(fechaExtraccion);
+      if (!isNaN(fecha.getTime())) {
+        fecha.setDate(fecha.getDate() + config.vigenciaDias);
+        const yyyy = fecha.getFullYear();
+        const mm = String(fecha.getMonth() + 1).padStart(2, '0');
+        const dd = String(fecha.getDate()).padStart(2, '0');
+        setFechaCaducidad(`${yyyy}-${mm}-${dd}`);
       }
     }
   };
@@ -114,20 +194,24 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
       if (guardarOtro) {
         // Se prepara el formulario para otra unidad; el modal sigue abierto
         // con el mensaje de éxito visible.
-        setTipoSangre('O+');
-        setHemocomponente('Concentrado eritrocitario');
-        setVolumen('300 ml');
-        setVigenciaDias(42);
+        const primerHemo = hemos[0] || hemocomponente;
+        const cfg = configHemo(primerHemo);
+        setTipoSangre(tiposSangre.includes('O+') ? 'O+' : (tiposSangre[0] || tipoSangre));
+        setHemocomponente(primerHemo);
+        setVolumen(cfg.volumenDefault);
+        setVigenciaDias(cfg.vigenciaDias);
         const hoy = hoyISO();
         setFechaExtraccion(hoy);
-        setFechaCaducidad(sumarDiasISO(hoy, 42));
+        setFechaCaducidad(sumarDiasISO(hoy, cfg.vigenciaDias));
       } else {
         // Se deja ver el código generado un momento y luego se cierra.
         setTimeout(() => { onClose(); }, 1200);
       }
     } catch (error) {
       console.error(error);
-      alert("Hubo un error al registrar la unidad en la base de datos.");
+      // Se muestra el motivo real del backend (p. ej. "Hemocomponente no
+      // válido: ...") en vez de un mensaje genérico.
+      alert(error?.response?.data || 'Hubo un error al registrar la unidad en la base de datos.');
     } finally {
       setCargando(false);
     }
@@ -229,21 +313,32 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
               </div>
             )}
 
-            {/* Tipo sanguíneo */}
+            {/* Aviso cuando no se pudo cargar el catálogo de la BD */}
+            {errorCatalogo && (
+              <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', borderRadius: '8px', padding: '10px 14px', marginBottom: '12px' }}>
+                <strong>No se pudo cargar el catálogo de hemocomponentes.</strong> {errorCatalogo}
+              </div>
+            )}
+
+            {/* Tipo sanguíneo (catálogo real de la BD) */}
             <div className="mreg-u-field-group">
               <label className="mreg-u-label">Tipo sanguíneo</label>
-              <div className="mreg-u-blood-grid">
-                {TIPOS_SANGUINEOS.map((tipo) => (
-                  <button
-                    key={tipo}
-                    type="button"
-                    className={`mreg-u-blood-btn ${tipoSangre === tipo ? 'active' : ''}`}
-                    onClick={() => setTipoSangre(tipo)}
-                  >
-                    {tipo}
-                  </button>
-                ))}
-              </div>
+              {cargandoCatalogos ? (
+                <p style={{ color: '#6b7280', fontSize: '0.9rem' }}>Cargando catálogo…</p>
+              ) : (
+                <div className="mreg-u-blood-grid">
+                  {tiposSangre.map((tipo) => (
+                    <button
+                      key={tipo}
+                      type="button"
+                      className={`mreg-u-blood-btn ${tipoSangre === tipo ? 'active' : ''}`}
+                      onClick={() => setTipoSangre(tipo)}
+                    >
+                      {tipo}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Hemocomponente, Volumen y Vigencia */}
@@ -254,12 +349,17 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
                   className="mreg-u-select"
                   value={hemocomponente}
                   onChange={(e) => handleCambioHemocomponente(e.target.value)}
+                  disabled={cargandoCatalogos || !!errorCatalogo}
                 >
-                  {Object.keys(HEMOCOMPONENTES_CATALOGO).map((hemo) => (
-                    <option key={hemo} value={hemo}>
-                      {hemo}
-                    </option>
-                  ))}
+                  {cargandoCatalogos ? (
+                    <option value={hemocomponente}>Cargando catálogo…</option>
+                  ) : (
+                    hemos.map((hemo) => (
+                      <option key={hemo} value={hemo}>
+                        {hemo}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 
@@ -329,7 +429,7 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
               type="button"
               className="btn-mreg-secondary"
               onClick={(e) => handleSubmit(e, true)}
-              disabled={cargando}
+              disabled={cargando || cargandoCatalogos || !!errorCatalogo}
             >
               <span className="mreg-action-icon">
                 <img src="/assets/iconos_gestionU/agregar.png" alt="" />
@@ -337,7 +437,7 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
               <span>{cargando ? 'Guardando...' : 'Guardar y agregar otra'}</span>
             </button>
 
-            <button type="submit" className="btn-mreg-primary" disabled={cargando}>
+            <button type="submit" className="btn-mreg-primary" disabled={cargando || cargandoCatalogos || !!errorCatalogo}>
               <span className="mreg-action-icon">
                 <img src="/assets/iconos_gestionU/aceptar.png" alt="" />
               </span>

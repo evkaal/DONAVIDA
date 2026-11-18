@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './SolicitudUnidades.css';
 import { Sidebar, Navbar } from '../../components/layout';
 import ModalPrevisualizacion from './ModalPrevisualizacion';
 import { crearSolicitud } from '../../services/solicitudesService';
+import { obtenerHemocomponentes, obtenerTiposSangre } from '../../services/catalogosService';
 
 export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }) {
   // Datos del solicitante tomados de la sesión. Sin fallbacks inventados:
@@ -21,6 +22,48 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
+  // Catálogos reales de la BD (nombres que el backend sí puede resolver).
+  // Sin lista hardcodeada: si el catálogo falla o viene vacío, se muestra
+  // el error y no se puede agregar ni enviar ninguna unidad.
+  const [hemos, setHemos] = useState([]);
+  const [tiposSangre, setTiposSangre] = useState([]);
+  const [cargandoCatalogos, setCargandoCatalogos] = useState(true);
+  const [errorCatalogo, setErrorCatalogo] = useState('');
+
+  useEffect(() => {
+    let cancelado = false;
+    Promise.all([obtenerHemocomponentes(), obtenerTiposSangre()])
+      .then(([h, t]) => {
+        if (cancelado) return;
+        const nombresH = h.map((x) => x.nombre).filter(Boolean);
+        const nombresT = t.map((x) => x.nombre).filter(Boolean);
+        if (nombresH.length === 0 || nombresT.length === 0) {
+          setErrorCatalogo('No se pudo cargar el catálogo de hemocomponentes o de tipos de sangre.');
+        }
+        setHemos(nombresH);
+        setTiposSangre(nombresT);
+      })
+      .catch(() => {
+        if (!cancelado) setErrorCatalogo('No se pudo cargar el catálogo de hemocomponentes. Revisa tu conexión e inténtalo de nuevo.');
+      })
+      .finally(() => {
+        if (!cancelado) setCargandoCatalogos(false);
+      });
+    return () => { cancelado = true; };
+  }, []);
+
+  // Si un renglón quedó con un valor que ya no está en el catálogo,
+  // se ajusta al primer valor válido para no mandar un nombre inválido.
+  useEffect(() => {
+    if (cargandoCatalogos || errorCatalogo || hemos.length === 0 || tiposSangre.length === 0) return;
+    setUnidades((prev) => prev.map((u) => ({
+      ...u,
+      tipo: tiposSangre.includes(u.tipo) ? u.tipo : tiposSangre[0],
+      hemocomponente: hemos.includes(u.hemocomponente) ? u.hemocomponente : hemos[0],
+    })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cargandoCatalogos, errorCatalogo]);
+
   // Fecha y hora actual formateada según el diseño
   const fechaActualFormateada = new Intl.DateTimeFormat('es-MX', {
     day: 'numeric',
@@ -36,10 +79,11 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
 
   // Manejadores
   const handleAgregarUnidad = () => {
+    if (errorCatalogo || hemos.length === 0 || tiposSangre.length === 0) return;
     const nuevaUnidad = {
       id: Date.now(),
-      tipo: 'O+',
-      hemocomponente: 'Concentrado eritrocitario',
+      tipo: tiposSangre.includes('O+') ? 'O+' : tiposSangre[0],
+      hemocomponente: hemos[0],
       cantidad: 1
     };
     setUnidades((prev) => [...prev, nuevaUnidad]);
@@ -137,6 +181,13 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
           {sinInstitucion && (
             <div style={{ background: '#fef3c7', border: '1px solid #fbbf24', color: '#92400e', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '0.95rem' }}>
               <strong>Sin institución asignada.</strong> Pide al administrador general que te asigne una institución.
+            </div>
+          )}
+
+          {/* Aviso cuando no se pudo cargar el catálogo de la BD */}
+          {errorCatalogo && (
+            <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '0.95rem' }}>
+              <strong>No se pudo cargar el catálogo de hemocomponentes.</strong> {errorCatalogo}
             </div>
           )}
 
@@ -257,7 +308,7 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
                     type="button"
                     className="btn-add-unit"
                     onClick={handleAgregarUnidad}
-                    disabled={sinInstitucion}
+                    disabled={sinInstitucion || cargandoCatalogos || !!errorCatalogo}
                   >
                     + Agregar unidad
                   </button>
@@ -275,36 +326,39 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
                   {unidades.length > 0 ? (
                     unidades.map((u) => (
                       <div key={u.id} className="sol-unit-row">
-                        {/* Tipo Sanguíneo */}
+                        {/* Tipo Sanguíneo (catálogo real de la BD) */}
                         <div className="sol-custom-select-wrapper col-tipo">
                           <select
                             className="sol-filter-select"
                             value={u.tipo}
                             onChange={(e) => handleUpdateUnidad(u.id, 'tipo', e.target.value)}
+                            disabled={cargandoCatalogos}
                           >
-                            <option value="A+">A+</option>
-                            <option value="A-">A-</option>
-                            <option value="B+">B+</option>
-                            <option value="B-">B-</option>
-                            <option value="AB+">AB+</option>
-                            <option value="AB-">AB-</option>
-                            <option value="O+">O+</option>
-                            <option value="O-">O-</option>
+                            {cargandoCatalogos ? (
+                              <option value={u.tipo}>Cargando catálogo…</option>
+                            ) : (
+                              tiposSangre.map((t) => (
+                                <option key={t} value={t}>{t}</option>
+                              ))
+                            )}
                           </select>
                         </div>
 
-                        {/* Hemocomponente */}
+                        {/* Hemocomponente (catálogo real de la BD) */}
                         <div className="sol-custom-select-wrapper col-hemo">
                           <select
                             className="sol-filter-select"
                             value={u.hemocomponente}
                             onChange={(e) => handleUpdateUnidad(u.id, 'hemocomponente', e.target.value)}
+                            disabled={cargandoCatalogos}
                           >
-                            <option value="Concentrado eritrocitario">Concentrado eritrocitario</option>
-                            <option value="Plaquetas">Plaquetas</option>
-                            <option value="Plasma fresco">Plasma fresco</option>
-                            <option value="Sangre total">Sangre total</option>
-                            <option value="Crioprecipitado">Crioprecipitado</option>
+                            {cargandoCatalogos ? (
+                              <option value={u.hemocomponente}>Cargando catálogo…</option>
+                            ) : (
+                              hemos.map((h) => (
+                                <option key={h} value={h}>{h}</option>
+                              ))
+                            )}
                           </select>
                         </div>
 
@@ -433,7 +487,7 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
                     type="button"
                     className="btn-preview-sol"
                     onClick={handlePrevisualizar}
-                    disabled={unidades.length === 0 || sinInstitucion}
+                    disabled={unidades.length === 0 || sinInstitucion || !!errorCatalogo}
                   >
                     <span className="btn-icon">
                       <img src="/assets/iconos_login/ojo.png" alt="" />
@@ -475,6 +529,8 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
           fechaFormateada: fechaActualFormateada,
           unidades
         }}
+        hemocomponentes={hemos}
+        tiposSangre={tiposSangre}
         onUpdateUnidad={handleUpdateUnidad}
         onAgregarUnidad={handleAgregarUnidad}
         onEliminarUnidad={handleEliminarUnidad}
