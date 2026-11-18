@@ -6,14 +6,11 @@ export const crearSolicitud = async (solicitudData) => {
 };
 
 export const obtenerSolicitudesEntrantes = async (institucionId) => {
-  try {
-    const q = institucionId ? `?institucion_id=${institucionId}` : '';
-    const response = await api.get(`/solicitudes/entrantes${q}`);
-    return Array.isArray(response.data) ? response.data : [];
-  } catch (err) {
-    console.error("Error obteniendo solicitudes entrantes:", err);
-    return [];
-  }
+  // Lanza el error para que el componente muestre el fallo en vez de
+  // un estado vacío que parece "no hay solicitudes".
+  const q = institucionId ? `?institucion_id=${institucionId}` : '';
+  const response = await api.get(`/solicitudes/entrantes${q}`);
+  return Array.isArray(response.data) ? response.data : [];
 };
 
 export const responderSolicitud = async (id, accion) => {
@@ -23,16 +20,13 @@ export const responderSolicitud = async (id, accion) => {
 };
 
 export const obtenerHistorico = async (institucionId, filtros = {}) => {
-  try {
-    const params = new URLSearchParams();
-    if (institucionId) params.set('institucion_id', institucionId);
-    if (filtros.tipo) params.set('tipo', filtros.tipo);
-    if (filtros.estado) params.set('estado', filtros.estado);
-    const q = params.toString() ? `?${params.toString()}` : '';
-    const response = await api.get(`/solicitudes/historico${q}`);
-    return response.data || { solicitudes: [], conteos: { todas: 0, enviadas: 0, recibidas: 0 } };
-  } catch (err) {
-    console.error("Error obteniendo histórico:", err);
-    return { solicitudes: [], conteos: { todas: 0, enviadas: 0, recibidas: 0 } };
-  }
+  // Lanza el error para que el componente muestre el fallo en vez de
+  // un estado vacío que parece "no hay solicitudes".
+  const params = new URLSearchParams();
+  if (institucionId) params.set('institucion_id', institucionId);
+  if (filtros.tipo) params.set('tipo', filtros.tipo);
+  if (filtros.estado) params.set('estado', filtros.estado);
+  const q = params.toString() ? `?${params.toString()}` : '';
+  const response = await api.get(`/solicitudes/historico${q}`);
+  return response.data || { solicitudes: [], conteos: { todas: 0, enviadas: 0, recibidas: 0 } };
 };

@@ -11,7 +11,11 @@ const ROLES_FALLBACK = [
 ];
 
 export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, usuarioActual }) {
-  const esAdminGen = usuarioActual?.rol_id === 1;
+  // Sesión del usuario que registra (prop o localStorage): de ahí sale su
+  // institución, que es la que se usa para el usuario nuevo.
+  const usuarioSesionModal = usuarioActual || JSON.parse(localStorage.getItem('usuario') || '{}');
+  const esAdminGen = usuarioSesionModal?.rol_id === 1;
+  const institucionSesionId = usuarioSesionModal?.institucion_id ?? null;
   const [rolesBd, setRolesBd] = useState([]);
   // Roles reales de la BD; si no llegan, el fallback. Se filtra por id
   // para no duplicar: si la BD trae un id, manda su nombre.
@@ -44,13 +48,15 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
         .then(data => {
           const lista = Array.isArray(data) ? data : [];
          setInstitucionesList(lista);
-         if(lista.length > 0){
-         setInstitucionId(lista[0].id);
+         // La institución es la de la sesión: un admin_institucion solo
+         // crea usuarios para su propia institución (el backend también
+         // lo fuerza). Solo el admin general elige otra institución.
+         if (institucionSesionId) {
+           setInstitucionId(institucionSesionId);
+         } else if (lista.length > 0) {
+           setInstitucionId(lista[0].id);
          }
-        
-
-
-        }) 
+        })
         .catch(err => console.error("Error al cargar instituciones:", err));
     }
   }, [isOpen]);
@@ -183,6 +189,8 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
                   className="select-field-modal"
                   value={institucionId}
                   onChange={(e) => setInstitucionId(e.target.value)}
+                  disabled={!esAdminGen && Boolean(institucionSesionId)}
+                  title={!esAdminGen && institucionSesionId ? 'Tu institución (de tu sesión)' : undefined}
                 >
                   {institucionesList.map((inst) => (
                     <option key={inst.id} value={inst.id}>

@@ -60,22 +60,39 @@ export default function Historico({ usuario, onCambiarModulo, onLogout }) {
   // Filtros de búsqueda
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todos');
-  const [filtroFecha, setFiltroFecha] = useState('ultimos_20');
+  // 'todas' por defecto: el filtro anterior ("1 – 20 oct 2026") era una
+  // etiqueta fija que no filtraba nada y escondía el resto de fechas.
+  const [filtroFecha, setFiltroFecha] = useState('todas');
 
   const [solicitudes, setSolicitudes] = useState([]);
+  const [errorCarga, setErrorCarga] = useState('');
 
   const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
   const esAdminGeneral = usuarioSesion?.rol_id === 1;
-  const institucionIdSesion = usuarioSesion?.institucion_id || localStorage.getItem('institucion_id');
+  // La institución es solo la de la sesión. Sin fallback: un usuario sin
+  // institución no ve el histórico de nadie, ve el aviso.
+  const institucionIdSesion = usuarioSesion?.institucion_id ?? null;
+  const sinInstitucion = !esAdminGeneral && !institucionIdSesion;
 
   useEffect(() => {
     const cargarHistorico = async () => {
-      // Admin general: sin institución propia -> 0 = todas las solicitudes,
-      // con tipo calculado por el tipo de institución solicitante (backend).
-      const data = await obtenerHistorico(esAdminGeneral ? 0 : institucionIdSesion);
-      const lista = Array.isArray(data?.solicitudes) ? data.solicitudes : [];
-      setSolicitudes(lista);
-      if (data?.conteos) setConteos(data.conteos);
+      if (sinInstitucion) {
+        setSolicitudes([]);
+        setConteos({ todas: 0, enviadas: 0, recibidas: 0 });
+        return;
+      }
+      try {
+        setErrorCarga('');
+        // Admin general: sin institución propia -> 0 = todas las solicitudes,
+        // con tipo calculado por el tipo de institución solicitante (backend).
+        const data = await obtenerHistorico(esAdminGeneral ? 0 : institucionIdSesion);
+        const lista = Array.isArray(data?.solicitudes) ? data.solicitudes : [];
+        setSolicitudes(lista);
+        if (data?.conteos) setConteos(data.conteos);
+      } catch (err) {
+        console.error("Error al cargar el histórico:", err);
+        setErrorCarga(err?.response?.data || err?.message || 'No se pudo cargar el histórico.');
+      }
     };
     cargarHistorico();
   }, []);
@@ -91,10 +108,37 @@ export default function Historico({ usuario, onCambiarModulo, onLogout }) {
   const [paginaActual, setPaginaActual] = useState(1);
 
   // Filtrado reactivo en front
+  // El filtro de fecha usa item.fecha (YYYY-MM-DD, que devuelve el backend).
+  const enRangoFecha = (item) => {
+    if (filtroFecha === 'todas' || !item.fecha) return true;
+    const f = new Date(`${item.fecha}T00:00:00`);
+    if (isNaN(f.getTime())) return true;
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    switch (filtroFecha) {
+      case 'ultimos_30': {
+        const hace30 = new Date(hoy);
+        hace30.setDate(hoy.getDate() - 29);
+        return f >= hace30 && f <= hoy;
+      }
+      case 'mes_actual':
+        return f >= new Date(hoy.getFullYear(), hoy.getMonth(), 1) && f <= hoy;
+      case 'mes_anterior':
+        return f >= new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1) && f <= new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+      case 'ano_actual':
+        return f >= new Date(hoy.getFullYear(), 0, 1) && f <= hoy;
+      default:
+        return true;
+    }
+  };
+
   const solicitudesFiltradas = solicitudes.filter((item) => {
     // Filtro por pestaña
     if (tabActiva === 'enviadas' && item.tipo !== 'enviada') return false;
     if (tabActiva === 'recibidas' && item.tipo !== 'recibida') return false;
+
+    // Filtro por fecha
+    if (!enRangoFecha(item)) return false;
 
     // Filtro por texto (ID o Institución)
     if (busqueda.trim() !== '') {
@@ -222,6 +266,20 @@ export default function Historico({ usuario, onCambiarModulo, onLogout }) {
             </div>
           </section>
 
+          {/* Aviso cuando el usuario no tiene institución asignada */}
+          {sinInstitucion && (
+            <div style={{ background: '#fef3c7', border: '1px solid #fbbf24', color: '#92400e', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '0.95rem' }}>
+              <strong>Sin institución asignada.</strong> Pide al administrador general que te asigne una institución.
+            </div>
+          )}
+
+          {/* Error al cargar desde la API (no se confunde con "no hay solicitudes") */}
+          {errorCarga && (
+            <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '0.95rem' }}>
+              <strong>Error al cargar el histórico:</strong> {String(errorCarga)}
+            </div>
+          )}
+
           {/* TARJETA PRINCIPAL: PESTAÑAS, FILTROS Y TABLA*/}
           <section className="hist-table-card">
             <div className="hist-toolbar-header">
@@ -280,10 +338,11 @@ export default function Historico({ usuario, onCambiarModulo, onLogout }) {
                     value={filtroFecha}
                     onChange={(e) => setFiltroFecha(e.target.value)}
                   >
-                    <option value="ultimos_20">1 – 20 oct 2026</option>
+                    <option value="todas">Todas las fechas</option>
+                    <option value="ultimos_30">Últimos 30 días</option>
                     <option value="mes_actual">Este mes</option>
                     <option value="mes_anterior">Mes anterior</option>
-                    <option value="todo_ano">Año en curso</option>
+                    <option value="ano_actual">Año en curso</option>
                   </select>
                 </div>
 
@@ -315,8 +374,7 @@ export default function Historico({ usuario, onCambiarModulo, onLogout }) {
               </div>
             </div>
 
-            {/* TABLA DE SOLICITUDES HISTÓRICAS
-                [BACKEND]: Conectar con GET /api/solicitudes/historico*/}
+            {/* TABLA DE SOLICITUDES HISTÓRICAS */}
             <div className="hist-table-container">
               <table className="hist-table">
                 <thead>
@@ -346,14 +404,12 @@ export default function Historico({ usuario, onCambiarModulo, onLogout }) {
                       </tr>
                     ))
                   ) : (
-                    /* [BACKEND]: Estado vacío inicial en blanco */
                     <tr>
                       <td colSpan="8" className="hist-table-empty-cell">
                         <div className="hist-empty-placeholder">
                           <p className="hist-empty-title">Sin solicitudes en el histórico (0)</p>
                           <span className="hist-empty-sub">
-                            [BACKEND]: Aquí se listará el histórico de solicitudes devueltas por{' '}
-                            <code>GET /api/solicitudes/historico</code>.
+                            Aún no hay solicitudes registradas.
                           </span>
                         </div>
                       </td>

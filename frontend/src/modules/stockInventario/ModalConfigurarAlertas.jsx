@@ -23,7 +23,7 @@ const VALORES_BASE_DEFAULT = {
 export default function ModalConfigurarAlertas({
   isOpen,
   onClose,
-  hospital = 'Hospital General',
+  hospital = 'Sin institución',
   usuario,
   onGuardar,
 }) {

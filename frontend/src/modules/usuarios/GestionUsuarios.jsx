@@ -262,7 +262,12 @@ export default function GestionUsuarios({
 
               {usuariosFiltrados.length === 0 ? (
                 <div className="usuarios-table-blank-notice">
-                  <span className="usuarios-table-blank-title">No hay usuarios registrados</span>
+                  <span className="usuarios-table-blank-title">{esAdminGeneral ? 'No hay usuarios registrados' : 'Aún no has creado usuarios'}</span>
+                  {!esAdminGeneral && (
+                    <span style={{ display: 'block', color: '#64748b', fontSize: '0.9rem', marginTop: '4px' }}>
+                      Los usuarios que registres aparecerán aquí.
+                    </span>
+                  )}
                 </div>
               ) : (
                 usuariosFiltrados.map((u) => (

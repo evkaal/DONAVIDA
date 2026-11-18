@@ -14,7 +14,10 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
 
   const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
   const esAdminGeneral = usuarioSesion?.rol_id === 1;
-  const institucionPropiaId = usuarioSesion?.institucion_id || localStorage.getItem('institucion_id');
+  // La institución es solo la de la sesión. Sin fallback: un usuario sin
+  // institución no ve el stock de nadie, ve el aviso.
+  const institucionPropiaId = usuarioSesion?.institucion_id ?? null;
+  const sinInstitucion = !esAdminGeneral && !institucionPropiaId;
 
   const cargarStock = async (institucionId) => {
     const data = await obtenerStockInstitucion(institucionId);
@@ -30,6 +33,7 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
     const init = async () => {
       const lista = await obtenerInstituciones();
       setInstitucionesList(lista);
+      if (sinInstitucion) return;
       // Admin general ve todas; los demás solo su institución.
       const idInicial = esAdminGeneral ? '' : institucionPropiaId;
       setHospitalSeleccionado(idInicial || '');
@@ -169,7 +173,17 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
             </div>
           </section>
 
+          {/* Aviso cuando el usuario no tiene institución asignada: sin
+              institución no se muestra el stock de nadie. */}
+          {sinInstitucion && (
+            <div style={{ background: '#fef3c7', border: '1px solid #fbbf24', color: '#92400e', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '0.95rem' }}>
+              <strong>Sin institución asignada.</strong> Pide al administrador general que te asigne una institución.
+            </div>
+          )}
+
           {/* Conectar con endpoint para el resumen*/}
+          {!sinInstitucion && (
+          <>
           <section className="stock-kpi-grid">
             {/* KPI 1: Unidades Disponibles */}
             <div className="stock-kpi-card">
@@ -193,7 +207,7 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
               </div>
               <div className="stock-kpi-value">{kpis.bajoMinimo}</div>
               <span className="stock-kpi-subtext text-warning-strong">
-                De {kpis.totalCombinaciones} combinaciones
+                Combinaciones bajo el mínimo
               </span>
             </div>
 
@@ -206,7 +220,7 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
                 </span>
               </div>
               <div className="stock-kpi-value">{kpis.sinExistencias}</div>
-              <span className="stock-kpi-subtext text-danger-strong">{kpis.detalleSinExistencias}</span>
+              <span className="stock-kpi-subtext text-danger-strong">Combinaciones sin unidades</span>
             </div>
 
             {/* KPI 4: Por caducar */}
@@ -301,13 +315,12 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
                         </tr>
                       ))
                     ) : (
-                      /* [BACKEND]: Estado vacío inicial señalizado */
                       <tr>
                         <td colSpan="6" className="stock-empty-cell">
                           <div className="stock-empty-placeholder">
                             <p className="stock-empty-title">Sin existencias registradas en el inventario (0)</p>
                             <span className="stock-empty-sub">
-                              Aquí se mapeará la matriz de existencias y mínimos devuelta con GET
+                              Aún no hay existencias registradas en el inventario.
                             </span>
                           </div>
                         </td>
@@ -375,11 +388,10 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
                   ))}
                 </div>
               ) : (
-                /* [BACKEND]: Estado vacío inicial de alertas */
                 <div className="stock-alerts-empty">
                   <p className="stock-empty-title">Sin alertas de stock pendientes (0)</p>
                   <span className="stock-empty-sub">
-                    Aquí se listarán las alertas generadas al ocupar GET cuando existan niveles por debajo del mínimo o unidades por caducar.
+                    No hay niveles por debajo del mínimo ni unidades por caducar.
                   </span>
                 </div>
               )}
@@ -453,13 +465,12 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
                       </tr>
                     ))
                   ) : (
-                    /* Estado vacío inicial */
                     <tr>
                       <td colSpan="6" className="stock-empty-cell">
                         <div className="stock-empty-placeholder">
                           <p className="stock-empty-title">Sin unidades próximas a caducar (0)</p>
                           <span className="stock-empty-sub">
-                            Aquí se listarán las unidades devueltas por el GET con caducidad cercana.
+                            No hay unidades con caducidad cercana.
                           </span>
                         </div>
                       </td>
@@ -469,6 +480,8 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
               </table>
             </div>
           </section>
+          </>
+          )}
         </main>
       </div>
 

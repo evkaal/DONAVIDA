@@ -71,9 +71,35 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Resolver al creador (si viene token JWT): su id queda en creado_por
+	// (columna de la migración 000002) y, si es admin_institucion (rol_id 2),
+	// la institución del nuevo usuario se fuerza a la suya: no puede crear
+	// usuarios para otra institución. Tampoco puede crear un admin general.
+	// Sin token (registro público /api/register), creado_por queda NULL.
+	creador, tieneCreador := sesionDesdeToken(r)
+	institucionID := input.InstitucionId
+	if tieneCreador {
+		if creador.RolID == 2 {
+			if input.RolID == 1 {
+				http.Error(w, "Un admin institucional no puede crear un administrador general", http.StatusForbidden)
+				return
+			}
+			if creador.InstitucionID == nil {
+				http.Error(w, "Tu usuario no tiene institución asignada. Pide al administrador general que te asigne una institución.", http.StatusBadRequest)
+				return
+			}
+			v := *creador.InstitucionID
+			institucionID = &v
+		}
+	}
+	var creadoPor *int
+	if tieneCreador {
+		creadoPor = &creador.ID
+	}
+
 	// Insertar en la base de datos vinculando la institución correspondiente
-	query := `INSERT INTO usuarios (nombre, email, password_hash, rol_id, institucion_id, estado) VALUES ($1, $2, $3, $4, $5, true)`
-	_, err = database.DB.Exec(query, input.Nombre, input.Email, string(hashedPassword), input.RolID, input.InstitucionId)
+	query := `INSERT INTO usuarios (nombre, email, password_hash, rol_id, institucion_id, estado, creado_por) VALUES ($1, $2, $3, $4, $5, true, $6)`
+	_, err = database.DB.Exec(query, input.Nombre, input.Email, string(hashedPassword), input.RolID, institucionID, creadoPor)
 	if err != nil {
 		log.Printf("Error al registrar usuario: %v", err)
 		http.Error(w, "Error al registrar el usuario en la BD: "+err.Error(), http.StatusInternalServerError)
@@ -171,12 +197,10 @@ func GetDashboardStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Obtener el parámetro de institución de la URL (ej. ?institucion_id=1)
-	institucionParam := r.URL.Query().Get("institucion_id")
-	var instID int = 0
-	if institucionParam != "" {
-		fmt.Sscanf(institucionParam, "%d", &instID)
-	}
+	// La institución se resuelve desde el JWT (ver institucionParaConsulta
+	// en solicitudes.go): un admin_institucion ve solo los números de su
+	// institución; sin institución, los conteos quedan en 0.
+	instID := institucionParaConsulta(r)
 
 	var uniDisponibles, proxCaducar, SolPendientes, nivCriticos int
 
@@ -350,7 +374,7 @@ func GetSolicitudesRecientes(w http.ResponseWriter, r *http.Request) {
 
 // RegistrarUnidad atiende la ruta POST /api/unidades
 type UnidadInput struct {
-	Codigo          string `json:"codigo"`
+	Codigo          string `json:"codigo"` // IGNORADO: el código lo genera el servidor (UN-0000, UN-0001, ...)
 	TipoSangre      string `json:"tipoSangre"`     // Ej: "O+"
 	Hemocomponente  string `json:"hemocomponente"` // Ej: "Concentrado eritrocitario"
 	Volumen         string `json:"volumen"`
@@ -358,6 +382,31 @@ type UnidadInput struct {
 	FechaCaducidad  string `json:"fechaCaducidad"`
 	Estado          string `json:"estado"` // "Disponible"
 	InstitucionID   int    `json:"institucion_id"`
+}
+
+// generarCodigoUnidad calcula el siguiente código de unidad dentro de la
+// transacción: MAX del sufijo numérico de los códigos UN-#### existentes + 1.
+// La tabla se bloquea en modo exclusivo durante el cálculo y la inserción
+// para que dos registros simultáneos no generen el mismo código
+// (codigo_unidad es UNIQUE). Si la tabla está vacía, el primer código es
+// UN-0000; si ya hay unidades, sigue desde la mayor existente para no
+// duplicar códigos.
+func generarCodigoUnidad(tx *sql.Tx) (string, error) {
+	if _, err := tx.Exec(`LOCK TABLE hemocomponentes IN EXCLUSIVE MODE`); err != nil {
+		return "", err
+	}
+	var maxCodigo sql.NullInt64
+	err := tx.QueryRow(`
+		SELECT MAX(CAST(SUBSTRING(codigo_unidad FROM '^UN-([0-9]+)$') AS INTEGER))
+		FROM hemocomponentes`).Scan(&maxCodigo)
+	if err != nil {
+		return "", err
+	}
+	siguiente := 0
+	if maxCodigo.Valid {
+		siguiente = int(maxCodigo.Int64) + 1
+	}
+	return fmt.Sprintf("UN-%04d", siguiente), nil
 }
 
 func RegistrarUnidad(w http.ResponseWriter, r *http.Request) {
@@ -371,6 +420,29 @@ func RegistrarUnidad(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Error al leer los datos de la unidad", http.StatusBadRequest)
 		return
+	}
+
+	// La institución se resuelve desde el JWT, no del body: un
+	// admin_institucion solo registra unidades para su propia institución.
+	// Admin general (rol_id 1) puede indicar institucion_id.
+	sesion, ok := sesionDesdeToken(r)
+	if !ok {
+		http.Error(w, "Token de autorización requerido", http.StatusUnauthorized)
+		return
+	}
+	var institucionID int
+	if sesion.RolID == 1 {
+		if input.InstitucionID <= 0 {
+			http.Error(w, "institucion_id es obligatorio para el admin general", http.StatusBadRequest)
+			return
+		}
+		institucionID = input.InstitucionID
+	} else {
+		if sesion.InstitucionID == nil {
+			http.Error(w, "Tu usuario no tiene institución asignada. Pide al administrador general que te asigne una institución.", http.StatusBadRequest)
+			return
+		}
+		institucionID = *sesion.InstitucionID
 	}
 
 	// 1. Obtener el ID del tipo de sangre (separando grupo ABO y factor Rh)
@@ -409,37 +481,63 @@ func RegistrarUnidad(w http.ResponseWriter, r *http.Request) {
 		tipoHemocomponenteID = 1
 	}
 
-	// 3. Obtener el ID del estado (ej. "Disponible")
+	// 3. Obtener el ID del estado (ej. "Disponible"; vacío = Disponible)
+	estadoNombre := strings.TrimSpace(input.Estado)
+	if estadoNombre == "" {
+		estadoNombre = "Disponible"
+	}
 	var estadoID int
 	err = database.DB.QueryRow(`
 		SELECT id FROM estados_hemocomponente WHERE nombre ILIKE $1
-	`, input.Estado).Scan(&estadoID)
+	`, estadoNombre).Scan(&estadoID)
 	if err != nil {
 		estadoID = 1
 	}
 
-	// 4. Insertar en la tabla hemocomponentes (sin el campo volumen que no existe en la BD)
-	query := `
-		INSERT INTO hemocomponentes 
-		(codigo_unidad, tipo_sangre_id, tipo_hemocomponente_id, estado_id, institucion_id, fecha_extraccion, fecha_caducidad)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id
-	`
+	// 4. Insertar en hemocomponentes con el código generado por el servidor
+	// (el codigo que mande el cliente se ignora). Si dos registros chocan
+	// con la UNIQUE de codigo_unidad, se reintenta una sola vez.
 	var nuevoID int
-	err = database.DB.QueryRow(
-		query,
-		input.Codigo,
-		tipoSangreID,
-		tipoHemocomponenteID,
-		estadoID,
-		input.InstitucionID,
-		input.FechaExtraccion,
-		input.FechaCaducidad,
-	).Scan(&nuevoID)
-
-	if err != nil {
-		log.Printf("Error al insertar unidad en BD: %v", err)
-		http.Error(w, "Error al registrar la unidad en la base de datos: "+err.Error(), http.StatusInternalServerError)
+	var codigoGenerado string
+	var insertErr error
+	for intento := 0; intento < 2; intento++ {
+		tx, errBegin := database.DB.Begin()
+		if errBegin != nil {
+			http.Error(w, "Error al iniciar la transacción", http.StatusInternalServerError)
+			return
+		}
+		codigo, errGen := generarCodigoUnidad(tx)
+		if errGen != nil {
+			tx.Rollback()
+			log.Printf("Error al generar código de unidad: %v", errGen)
+			http.Error(w, "Error al generar el código de la unidad", http.StatusInternalServerError)
+			return
+		}
+		errInsert := tx.QueryRow(`
+			INSERT INTO hemocomponentes
+			(codigo_unidad, tipo_sangre_id, tipo_hemocomponente_id, estado_id, institucion_id, fecha_extraccion, fecha_caducidad)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			RETURNING id
+		`, codigo, tipoSangreID, tipoHemocomponenteID, estadoID, institucionID, input.FechaExtraccion, input.FechaCaducidad).Scan(&nuevoID)
+		if errInsert != nil {
+			tx.Rollback()
+			if intento == 0 && strings.Contains(errInsert.Error(), "duplicate key") {
+				continue
+			}
+			insertErr = errInsert
+			break
+		}
+		if errCommit := tx.Commit(); errCommit != nil {
+			insertErr = errCommit
+			break
+		}
+		codigoGenerado = codigo
+		insertErr = nil
+		break
+	}
+	if insertErr != nil {
+		log.Printf("Error al insertar unidad en BD: %v", insertErr)
+		http.Error(w, "Error al registrar la unidad en la base de datos: "+insertErr.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -448,6 +546,8 @@ func RegistrarUnidad(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"mensaje": "Unidad registrada con éxito en la BD",
 		"id":      nuevoID,
+		"codigo":  codigoGenerado,
+		"folio":   codigoGenerado,
 	})
 }
 
@@ -609,10 +709,21 @@ func RegistrarInstitucion(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// 1. Obtener todos los usuarios registrados (con el nombre de su institución y rol)
+// 1. Obtener los usuarios registrados (con el nombre de su institución y rol).
+// Ámbito por rol (el filtro lo aplica el backend, no el frontend):
+//   - admin general (rol_id 1): todos los usuarios.
+//   - admin institucional (rol_id 2): solo los que ÉL creó (creado_por = su id);
+//     si no ha creado ninguno, la lista viene vacía.
+//   - personal médico (rol_id 3): 403, este módulo es solo de administradores.
 func GetUsuarios(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	sesion, ok := sesionDesdeToken(r)
+	if !ok {
+		http.Error(w, "Token de autorización requerido", http.StatusUnauthorized)
 		return
 	}
 
@@ -625,9 +736,21 @@ func GetUsuarios(w http.ResponseWriter, r *http.Request) {
 		FROM usuarios u
 		LEFT JOIN roles r ON u.rol_id = r.id
 		LEFT JOIN instituciones i ON u.institucion_id = i.id
-		ORDER BY u.id DESC
 	`
-	rows, err := database.DB.Query(query)
+	var args []interface{}
+	switch {
+	case sesion.RolID == 1:
+		// Sin filtro: el admin general ve a todos.
+	case sesion.RolID == 2:
+		query += ` WHERE u.creado_por = $1`
+		args = append(args, sesion.ID)
+	default:
+		http.Error(w, "Este módulo es solo para administradores", http.StatusForbidden)
+		return
+	}
+	query += ` ORDER BY u.id DESC`
+
+	rows, err := database.DB.Query(query, args...)
 	if err != nil {
 		log.Printf("Error al consultar usuarios en BD: %v", err)
 		http.Error(w, "Error al obtener usuarios: "+err.Error(), http.StatusInternalServerError)
@@ -672,10 +795,21 @@ func GetUsuarios(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(usuarios)
 }
 
-// 2. Eliminar un usuario por su ID (Exclusivo Admin General)
+// 2. Eliminar un usuario por su ID (admin general: cualquiera;
+// admin institucional: solo los que él creó; personal médico: prohibido).
 func EliminarUsuario(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	sesion, ok := sesionDesdeToken(r)
+	if !ok {
+		http.Error(w, "Token de autorización requerido", http.StatusUnauthorized)
+		return
+	}
+	if sesion.RolID == 3 {
+		http.Error(w, "Acceso denegado", http.StatusForbidden)
 		return
 	}
 
@@ -695,8 +829,17 @@ func EliminarUsuario(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2. Ahora procedemos a borrar físicamente al usuario de la base de datos
-	query := `DELETE FROM usuarios WHERE id = $1`
-	result, err := database.DB.Exec(query, userID)
+	// (un admin institucional solo puede borrar los usuarios que él creó).
+	var query string
+	var args []interface{}
+	if sesion.RolID == 2 {
+		query = `DELETE FROM usuarios WHERE id = $1 AND creado_por = $2`
+		args = []interface{}{userID, sesion.ID}
+	} else {
+		query = `DELETE FROM usuarios WHERE id = $1`
+		args = []interface{}{userID}
+	}
+	result, err := database.DB.Exec(query, args...)
 	if err != nil {
 		log.Printf("Error al eliminar usuario en BD: %v", err)
 		http.Error(w, "Error al eliminar el usuario en la base de datos", http.StatusInternalServerError)

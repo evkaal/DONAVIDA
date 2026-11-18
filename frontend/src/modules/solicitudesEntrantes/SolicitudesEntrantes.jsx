@@ -10,20 +10,36 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
   const [busqueda, setBusqueda] = useState('');
 
   const [solicitudes, setSolicitudes] = useState([]);
+  const [errorCarga, setErrorCarga] = useState('');
 
   const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
-  const institucionIdSesion = usuarioSesion?.institucion_id || localStorage.getItem('institucion_id');
+  // La institución es solo la de la sesión. Sin fallback: un usuario sin
+  // institución no ve entrantes de nadie, ve el aviso.
+  const institucionIdSesion = usuarioSesion?.institucion_id ?? null;
+  const esAdminGeneral = usuarioSesion?.rol_id === 1;
+  const sinInstitucion = !esAdminGeneral && !institucionIdSesion;
 
   const cargarEntrantes = async () => {
-    const data = await obtenerSolicitudesEntrantes(institucionIdSesion);
-    const lista = Array.isArray(data) ? data : [];
-    setSolicitudes(lista);
-    setConteos({
-      pendientes: lista.filter((x) => x.estado === 'pendiente').length,
-      aceptadas: lista.filter((x) => x.estado === 'aceptada').length,
-      rechazadas: lista.filter((x) => x.estado === 'rechazada').length,
-      todas: lista.length,
-    });
+    if (sinInstitucion) {
+      setSolicitudes([]);
+      setConteos({ pendientes: 0, aceptadas: 0, rechazadas: 0, todas: 0 });
+      return;
+    }
+    try {
+      setErrorCarga('');
+      const data = await obtenerSolicitudesEntrantes(institucionIdSesion);
+      const lista = Array.isArray(data) ? data : [];
+      setSolicitudes(lista);
+      setConteos({
+        pendientes: lista.filter((x) => x.estado === 'pendiente').length,
+        aceptadas: lista.filter((x) => x.estado === 'aceptada').length,
+        rechazadas: lista.filter((x) => x.estado === 'rechazada').length,
+        todas: lista.length,
+      });
+    } catch (err) {
+      console.error("Error al cargar solicitudes entrantes:", err);
+      setErrorCarga(err?.response?.data || err?.message || 'No se pudieron cargar las solicitudes entrantes.');
+    }
   };
 
   useEffect(() => { cargarEntrantes(); }, []);
@@ -171,6 +187,20 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
             </div>
           </section>
 
+          {/* Aviso cuando el usuario no tiene institución asignada */}
+          {sinInstitucion && (
+            <div style={{ background: '#fef3c7', border: '1px solid #fbbf24', color: '#92400e', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '0.95rem' }}>
+              <strong>Sin institución asignada.</strong> Pide al administrador general que te asigne una institución.
+            </div>
+          )}
+
+          {/* Error al cargar desde la API (no se confunde con "no hay solicitudes") */}
+          {errorCarga && (
+            <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '0.95rem' }}>
+              <strong>Error al cargar las solicitudes entrantes:</strong> {String(errorCarga)}
+            </div>
+          )}
+
           {/* TABLA*/}
           <div className="sentr-layout-grid">
             <div className="sentr-table-card">
@@ -258,14 +288,12 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
                         </tr>
                       ))
                     ) : (
-                      /* [BACKEND]: Estado vacío inicial */
                       <tr>
                         <td colSpan="6" className="sentr-table-empty-cell">
                           <div className="sentr-empty-placeholder">
                             <p className="sentr-empty-title">Sin solicitudes entrantes (0)</p>
                             <span className="sentr-empty-sub">
-                              [BACKEND]: Aquí se listarán las solicitudes de emergencia entrantes devueltas por{' '}
-                              <code>GET /api/solicitudes/entrantes</code>.
+                              Aún no hay solicitudes de otras instituciones pendientes de atender.
                             </span>
                           </div>
                         </td>
