@@ -273,23 +273,33 @@ func GetDashboardStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// 1. Obtener stock agrupado por tipo sanguíneo para la gráfica
-// 1. Obtener stock agrupado por tipo sanguíneo para la gráfica
+// 1. Obtener stock agrupado por tipo sanguíneo para la gráfica.
+// Cuenta SOLO unidades disponibles y SOLO de la institución del usuario
+// (misma semántica que GetDashboardStats): rol 1 ve todas las
+// instituciones, rol 2/3 solo la suya, y sin institución todo queda en 0.
+// Los 8 tipos de sangre siempre aparecen (con 0 si no hay unidades), por
+// eso los filtros van en la condición del LEFT JOIN, nunca en un WHERE.
 func GetStockPorTipo(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
 		return
 	}
 
+	instID := institucionParaConsulta(r)
+
 	rows, err := database.DB.Query(`
-        SELECT ts.grupo_abo || ts.factor_rh AS tipo, 
+        SELECT ts.grupo_abo || ts.factor_rh AS tipo,
                COUNT(h.id) AS cantidad
         FROM tipos_sangre ts
-        LEFT JOIN hemocomponentes h ON ts.id = h.tipo_sangre_id 
-        LEFT JOIN estados_hemocomponente eh ON h.estado_id = eh.id AND eh.nombre ILIKE 'disponible'
+        LEFT JOIN hemocomponentes h
+               ON ts.id = h.tipo_sangre_id
+              AND ($1 = 0 OR h.institucion_id = $1)
+              AND EXISTS (SELECT 1 FROM estados_hemocomponente eh
+                           WHERE eh.id = h.estado_id
+                             AND eh.nombre ILIKE 'disponible')
         GROUP BY ts.grupo_abo, ts.factor_rh
         ORDER BY tipo;
-    `)
+    `, instID)
 	if err != nil {
 		http.Error(w, "Error al consultar stock por tipo", http.StatusInternalServerError)
 		return
