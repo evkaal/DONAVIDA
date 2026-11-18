@@ -8,7 +8,8 @@ export default function ModalPrevisualizacion({
   onUpdateUnidad,
   onAgregarUnidad,
   onEliminarUnidad,
-  onConfirmarEnvio
+  onConfirmarEnvio,
+  enviando = false
 }) {
   if (!isOpen) return null;
 
@@ -234,12 +235,12 @@ export default function ModalPrevisualizacion({
               type="button"
               className="mprev-btn-submit"
               onClick={onConfirmarEnvio}
-              disabled={unidades.length === 0}
+              disabled={unidades.length === 0 || enviando}
             >
               <span className='mprev-enviar-icon'>
                 <img src="/assets/iconos_dash/avion-de-papel2.png" alt="" />
               </span>
-              <span>Enviar solicitud</span>
+              <span>{enviando ? "Enviando…" : "Enviar solicitud"}</span>
             </button>
           </div>
         </div>

@@ -35,6 +35,21 @@ export default function Login({ onLoginSuccess }) {
       if (data && data.token) {
         localStorage.setItem("token", data.token);
       }
+      // Guardar la sesión del usuario para que los módulos (Gestión de
+      // usuarios, Stock, Solicitudes...) sepan su rol e institución incluso
+      // tras refrescar la página.
+      if (data) {
+        const usuarioSesion = {
+          nombre: data.nombre,
+          email: data.email,
+          rol_id: data.rol_id,
+          institucion_id: data.institucion_id ?? null,
+          institucion: data.institucion ?? null,
+        };
+        localStorage.setItem("usuario", JSON.stringify(usuarioSesion));
+        localStorage.setItem("rol_id", String(data.rol_id ?? ""));
+        localStorage.setItem("institucion_id", String(data.institucion_id ?? ""));
+      }
 
       // Redirigir al dashboard únicamente si el login fue exitoso
       setTimeout(() => {
@@ -103,6 +118,15 @@ export default function Login({ onLoginSuccess }) {
             Ingresa con tu cuenta institucional para gestionar el inventario y
             las solicitudes de sangre.
           </p>
+
+          {/* Aviso de inicio de sesión exitoso */}
+          {loginExitoso && (
+            <div className="custom-alert-success" role="status">
+              <p style={{ margin: 0 }}>
+                Inicio de sesión exitoso, redirigiendo…
+              </p>
+            </div>
+          )}
 
           {/* Alerta de credenciales incorrectas */}
           {errorLogin && (

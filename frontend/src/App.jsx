@@ -3,7 +3,7 @@ import Login from './modules/login';
 import Dashboard from './modules/dashboard';
 import GestionUsuarios from './modules/usuarios';
 import RegistroUnidades from './modules/registroUnidades';
-import StockInventario from './modules/inventario/StockInventario';
+import StockInventario from './modules/stockInventario/StockInventario';
 import Historico from './modules/historico';
 import SolicitudUnidades from './modules/solicitudUnidades';
 import SolicitudesEntrantes from './modules/solicitudesEntrantes';
@@ -17,6 +17,10 @@ function App() {
   const [moduloApp, setModuloApp] = useState('dashboard');
 
   const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('usuario');
+    localStorage.removeItem('rol_id');
+    localStorage.removeItem('institucion_id');
     setUsuario(null);
     setModuloApp('dashboard');
   };

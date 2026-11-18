@@ -15,10 +15,11 @@ export const registrarUnidad = async (unidadData) => {
   }
 };
 
-export const getUnidades = async () => {
+export const getUnidades = async (institucionId) => {
   try{
     const token = localStorage.getItem('token');
-    const response = await api.get('/unidades', {
+    const q = institucionId ? `?institucion_id=${institucionId}` : '';
+    const response = await api.get(`/unidades${q}`, {
       headers: {
         Authorization: `Bearer ${token}`
       }

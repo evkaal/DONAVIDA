@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import './SolicitudUnidades.css';
 import { Sidebar, Navbar } from '../../components/layout';
 import ModalPrevisualizacion from './ModalPrevisualizacion';
+import { crearSolicitud } from '../../services/solicitudesService';
 
 export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }) {
   // Datos del solicitante tomados de la sesión
@@ -14,6 +15,7 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
   const [unidades, setUnidades] = useState([]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [enviando, setEnviando] = useState(false);
 
   // Fecha y hora actual formateada según el diseño
   const fechaActualFormateada = new Intl.DateTimeFormat('es-MX', {
@@ -69,29 +71,37 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
     setIsModalOpen(true);
   };
 
-  const handleConfirmarEnvio = () => {
-    const payload = {
-      institucion: institucionSesion,
-      solicitante: solicitanteSesion,
-      prioridad,
-      motivo,
-      unidades: unidades.map(({ tipo, hemocomponente, cantidad }) => ({
-        tipo,
-        hemocomponente,
-        cantidad
-      }))
-    };
-
-    console.log('[BACKEND] Enviando solicitud a POST /api/solicitudes:', payload);
-
-    alert(`¡Solicitud enviada con éxito! Se alertó a la red de bancos de sangre. (Total: ${totalUnidades} unidades)`);
-    setIsModalOpen(false);
-    setUnidades([]);
-    setMotivo('');
-    setPrioridad('critica');
-
-    if (onCambiarModulo) {
-      onCambiarModulo('historico');
+  const handleConfirmarEnvio = async () => {
+    if (enviando || unidades.length === 0) return;
+    const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
+    const institucionId = usuarioSesion?.institucion_id || localStorage.getItem('institucion_id');
+    if (!institucionId) {
+      alert('No se pudo determinar tu institución. Vuelve a iniciar sesión.');
+      return;
+    }
+    setEnviando(true);
+    try {
+      await crearSolicitud({
+        institucion_id: Number(institucionId),
+        prioridad,
+        motivo,
+        unidades: unidades.map(({ tipo, hemocomponente, cantidad }) => ({
+          tipo,
+          hemocomponente,
+          cantidad
+        }))
+      });
+      setIsModalOpen(false);
+      setUnidades([]);
+      setMotivo('');
+      setPrioridad('critica');
+      if (onCambiarModulo) {
+        onCambiarModulo('historico');
+      }
+    } catch (err) {
+      alert(err?.response?.data || err?.message || 'No se pudo enviar la solicitud.');
+    } finally {
+      setEnviando(false);
     }
   };
 
@@ -454,6 +464,7 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
         onAgregarUnidad={handleAgregarUnidad}
         onEliminarUnidad={handleEliminarUnidad}
         onConfirmarEnvio={handleConfirmarEnvio}
+        enviando={enviando}
       />
     </div>
   );
