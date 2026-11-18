@@ -50,11 +50,11 @@ export default function ModalPrevisualizacion({
             <div className="mprev-meta-grid">
               <div className="mprev-meta-item">
                 <span className="mprev-meta-label">Institución solicitante</span>
-                <span className="mprev-meta-val">{institucion || 'Hospital General'}</span>
+                <span className="mprev-meta-val">{institucion || 'Sin institución'}</span>
               </div>
               <div className="mprev-meta-item">
                 <span className="mprev-meta-label">Solicitante</span>
-                <span className="mprev-meta-val">{solicitante || 'Elena Ruiz'}</span>
+                <span className="mprev-meta-val">{solicitante || 'Sin sesión'}</span>
               </div>
               <div className="mprev-meta-item">
                 <span className="mprev-meta-label">ID de solicitud</span>

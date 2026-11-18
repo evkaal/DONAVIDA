@@ -1,19 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import './ModalRegistrarUsuario.css';
-import { registrarUsuario, obtenerInstituciones } from '../../services/usuariosService';
+import { registrarUsuario, obtenerInstituciones, obtenerRoles } from '../../services/usuariosService';
+
+// Fallback si /catalogos/roles falla o la BD aún no tiene roles sembrados.
+// Sin duplicados: un solo registro por id.
+const ROLES_FALLBACK = [
+  { id: 1, nombre: 'Administrador general' },
+  { id: 2, nombre: 'Admin institucional' },
+  { id: 3, nombre: 'Personal médico' },
+];
 
 export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, usuarioActual }) {
-  const esAdminGen = usuarioActual?.rol_id === 1;
-  const rolesDisponibles = esAdminGen
-    ? [
-        { id: 3, label: 'Personal médico' },
-        { id: 2, label: 'Admin institucional' },
-        { id: 1, label: 'Administrador general' },
-      ]
-    : [
-        { id: 3, label: 'Personal médico' },
-        { id: 2, label: 'Admin institucional' },
-      ];
+  // Sesión del usuario que registra (prop o localStorage): de ahí sale su
+  // institución, que es la que se usa para el usuario nuevo.
+  const usuarioSesionModal = usuarioActual || JSON.parse(localStorage.getItem('usuario') || '{}');
+  const esAdminGen = usuarioSesionModal?.rol_id === 1;
+  const institucionSesionId = usuarioSesionModal?.institucion_id ?? null;
+  const [rolesBd, setRolesBd] = useState([]);
+  // Roles reales de la BD; si no llegan, el fallback. Se filtra por id
+  // para no duplicar: si la BD trae un id, manda su nombre.
+  const rolesBase = rolesBd.length > 0 ? rolesBd : ROLES_FALLBACK;
+  const rolesDisponibles = rolesBase
+    .filter((r) => esAdminGen || r.id !== 1)
+    .map((r) => ({ id: r.id, label: r.nombre }))
+    .filter((r, i, arr) => arr.findIndex((x) => x.id === r.id) === i);
 
   const [nombre, setNombre] = useState('');
   const [correo, setCorreo] = useState('');
@@ -28,20 +38,25 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [mostrarConfirm, setMostrarConfirm] = useState(false);
 
-  // Cargar instituciones reales al abrir el modal
+  // Cargar roles e instituciones reales al abrir el modal
   useEffect(() => {
     if (isOpen) {
+      obtenerRoles()
+        .then((data) => { if (Array.isArray(data) && data.length > 0) setRolesBd(data); })
+        .catch((err) => console.error("Error al cargar roles:", err));
       obtenerInstituciones()
         .then(data => {
           const lista = Array.isArray(data) ? data : [];
          setInstitucionesList(lista);
-         if(lista.length > 0){
-         setInstitucionId(lista[0].id);
+         // La institución es la de la sesión: un admin_institucion solo
+         // crea usuarios para su propia institución (el backend también
+         // lo fuerza). Solo el admin general elige otra institución.
+         if (institucionSesionId) {
+           setInstitucionId(institucionSesionId);
+         } else if (lista.length > 0) {
+           setInstitucionId(lista[0].id);
          }
-        
-
-
-        }) 
+        })
         .catch(err => console.error("Error al cargar instituciones:", err));
     }
   }, [isOpen]);
@@ -174,6 +189,8 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
                   className="select-field-modal"
                   value={institucionId}
                   onChange={(e) => setInstitucionId(e.target.value)}
+                  disabled={!esAdminGen && Boolean(institucionSesionId)}
+                  title={!esAdminGen && institucionSesionId ? 'Tu institución (de tu sesión)' : undefined}
                 >
                   {institucionesList.map((inst) => (
                     <option key={inst.id} value={inst.id}>

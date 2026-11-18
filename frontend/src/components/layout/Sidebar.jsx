@@ -6,12 +6,16 @@ export default function Sidebar({ usuario, moduloActivo = 'dashboard', onCambiar
   // Roles 
 
 
-const getRolString = (id) => {
-  if (id === 1) return 'admin_gen';
-  if (id === 2) return 'admin_ins';
-  if (id === 3) return 'medico';
-  return usuario?.rol || 'medico';
-};
+  // Roles solo por rol_id (1=admin_gen, 2=admin_ins, 3=medico).
+  // Sin rol_id ni rol, devuelve '' y NO se asume médico: el Sidebar no
+  // muestra secciones de admin y el Navbar no inventa un usuario.
+  const getRolString = (id) => {
+    if (id === 1) return 'admin_gen';
+    if (id === 2) return 'admin_ins';
+    if (id === 3) return 'medico';
+    if (usuario?.rol === 'admin_gen' || usuario?.rol === 'admin_ins' || usuario?.rol === 'medico') return usuario.rol;
+    return '';
+  };
 
 
 

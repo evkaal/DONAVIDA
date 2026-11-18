@@ -8,14 +8,28 @@ export default function Navbar({
   onCambioBusqueda,
   onNotificacionesClick,
 }) {
-  const esAdmin = usuario?.rol === 'admin' || (typeof usuario === 'string' && usuario.includes('admin'));
-  const nombreUsuario = usuario?.nombre || (esAdmin ? 'Admin DONAVIDA' : 'Personal Médico');
-  const institucionUsuario = usuario?.institucion || (esAdmin ? 'Administrador · Sistema' : 'Hospital General');
-  const avatarIniciales = esAdmin
-    ? 'AD'
-    : (usuario?.correo
-      ? usuario.correo.substring(0, 2).toUpperCase()
-      : (usuario?.nombre ? usuario.nombre.substring(0, 2).toUpperCase() : 'PM'));
+  // Admin general: rol_id 1 (el usuario real nunca trae rol='admin').
+  const esAdminGen = usuario?.rol_id === 1;
+  const esAdmin = esAdminGen || usuario?.rol === 'admin' || (typeof usuario === 'string' && usuario.includes('admin'));
+  const sinSesion = !usuario || (typeof usuario === 'object' && !usuario.nombre && !usuario.email);
+  const nombreUsuario = sinSesion
+    ? 'Sin sesión'
+    : (usuario?.nombre
+      || (usuario?.email ? usuario.email.split('@')[0] : null)
+      || (esAdmin ? 'Admin DONAVIDA' : 'Usuario'));
+  // Admin general nunca es de un hospital: su institución es el sistema.
+  const institucionUsuario = sinSesion
+    ? 'Sesión no iniciada'
+    : (esAdminGen
+      ? 'Administrador · Sistema'
+      : (usuario?.institucion || 'Sin institución'));
+  const avatarIniciales = sinSesion
+    ? '--'
+    : (esAdmin
+      ? 'AD'
+      : (usuario?.correo
+        ? usuario.correo.substring(0, 2).toUpperCase()
+        : (usuario?.nombre ? usuario.nombre.substring(0, 2).toUpperCase() : 'PM')));
 
   return (
     <header className="dona-topbar">

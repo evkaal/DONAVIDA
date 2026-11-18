@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './ModalRegistroUnidad.css';
-import { registrarUnidad, getUnidades } from '../../services/unidadesService';
+import { registrarUnidad } from '../../services/unidadesService';
 
 // Catálogo de hemocomponentes con su vigencia y volumen por defecto
 const HEMOCOMPONENTES_CATALOGO = {
@@ -13,17 +13,44 @@ const HEMOCOMPONENTES_CATALOGO = {
 
 const TIPOS_SANGUINEOS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
+// Fecha de hoy en formato YYYY-MM-DD (la fecha de extracción por defecto
+// ya no es una fecha fija del pasado).
+const hoyISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const sumarDiasISO = (iso, dias) => {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + dias);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, usuario }) {
   // 1. Estados locales del formulario
-  const institucionDefecto = usuario?.institucion || 'Hospital General';
-  const [codigo, setCodigo] = useState('UN-2032');
+  // La institución es la de la sesión; si el usuario no tiene, se muestra
+  // "Sin institución" (nunca se inventa una por defecto).
+  const institucionDefecto = usuario?.institucion || 'Sin institución';
   const [tipoSangre, setTipoSangre] = useState('O+');
   const [hemocomponente, setHemocomponente] = useState('Concentrado eritrocitario');
   const [volumen, setVolumen] = useState('300 ml');
   const [vigenciaDias, setVigenciaDias] = useState(42);
-  const [fechaExtraccion, setFechaExtraccion] = useState('2026-10-21');
-  const [fechaCaducidad, setFechaCaducidad] = useState('2026-12-02');
+  const [fechaExtraccion, setFechaExtraccion] = useState(hoyISO());
+  const [fechaCaducidad, setFechaCaducidad] = useState(() => sumarDiasISO(hoyISO(), 42));
   const [cargando, setCargando] = useState(false);
+  const [mensajeExito, setMensajeExito] = useState('');
+
+  // Al abrir el modal, las fechas vuelven a hoy (con su vigencia) y se
+  // limpia el mensaje de éxito anterior.
+  useEffect(() => {
+    if (isOpen) {
+      const hoy = hoyISO();
+      setFechaExtraccion(hoy);
+      setFechaCaducidad(sumarDiasISO(hoy, vigenciaDias));
+      setMensajeExito('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   // Actualizar vigencia y volumen sugerido al cambiar el hemocomponente
   const handleCambioHemocomponente = (nuevoHemo) => {
@@ -51,12 +78,19 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
 
   const handleSubmit = async (e, guardarOtro = false) => {
     e.preventDefault();
+    // Sin institución no se puede registrar: el backend lo rechazaría,
+    // pero se avisa antes de intentar.
+    if (!usuario?.institucion_id && usuario?.rol_id !== 1) {
+      alert('Tu usuario no tiene institución asignada. Pide al administrador general que te asigne una institución.');
+      return;
+    }
     setCargando(true);
+    setMensajeExito('');
 
+    // El código de unidad lo genera el servidor (UN-0000, UN-0001, ...):
+    // no se manda codigo y la institución es la de la sesión.
     const nuevaUnidad = {
-      codigo: codigo.trim(),
-      institucion_id: usuario?.institucion_id || 1,
-      institucion: institucionDefecto,
+      institucion_id: usuario?.institucion_id,
       tipoSangre,
       hemocomponente,
       volumen,
@@ -68,17 +102,28 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
 
     try {
       const resultado = await registrarUnidad(nuevaUnidad);
+      const codigoGenerado = resultado?.codigo || resultado?.folio || '';
+      setMensajeExito(codigoGenerado
+        ? `Unidad ${codigoGenerado} registrada con éxito.`
+        : 'Unidad registrada con éxito.');
 
       if (onSaveSuccess) {
-        onSaveSuccess(nuevaUnidad);
+        onSaveSuccess(resultado);
       }
 
       if (guardarOtro) {
-        const match = codigo.match(/\d+/);
-        const siguienteNumero = match ? parseInt(match[0], 10) + 1 : 2033;
-        setCodigo(`UN-${siguienteNumero}`);
+        // Se prepara el formulario para otra unidad; el modal sigue abierto
+        // con el mensaje de éxito visible.
+        setTipoSangre('O+');
+        setHemocomponente('Concentrado eritrocitario');
+        setVolumen('300 ml');
+        setVigenciaDias(42);
+        const hoy = hoyISO();
+        setFechaExtraccion(hoy);
+        setFechaCaducidad(sumarDiasISO(hoy, 42));
       } else {
-        onClose();
+        // Se deja ver el código generado un momento y luego se cierra.
+        setTimeout(() => { onClose(); }, 1200);
       }
     } catch (error) {
       console.error(error);
@@ -157,23 +202,32 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
               </div>
             </div>
 
-            {/* Código de unidad */}
+            {/* Código de unidad: lo asigna el servidor al guardar */}
             <div className="mreg-u-field-group">
-              <label htmlFor="codigo-unidad" className="mreg-u-label">
-                Código de unidad
+              <label className="mreg-u-label">
+                <span>Código de unidad</span>
+                <span className="mreg-u-badge-tag">Automático</span>
               </label>
-              <input
-                id="codigo-unidad"
-                type="text"
-                className="mreg-u-input"
-                placeholder="Ej. UN-2032"
-                value={codigo}
-                onChange={(e) => setCodigo(e.target.value)}
-                maxLength={30}
-                required
-              />
-              <span className="mreg-u-helper-text">Sugerido por el sistema · máximo 30 caracteres</span>
+              <div className="mreg-u-input-wrapper mreg-u-readonly-box">
+                <input
+                  type="text"
+                  className="mreg-u-input mreg-u-input-readonly"
+                  value="Se asigna automáticamente al guardar"
+                  readOnly
+                />
+                <span className="mreg-u-input-icon-right">
+                  <img src="/assets/iconos_gestionU/cerrar.png" alt="" />
+                </span>
+              </div>
+              <span className="mreg-u-helper-text">El sistema asigna el siguiente código disponible (UN-0000, UN-0001, …)</span>
             </div>
+
+            {/* Mensaje de éxito con el código generado por el servidor */}
+            {mensajeExito && (
+              <div style={{ background: '#dcfce7', border: '1px solid #86efac', color: '#166534', borderRadius: '8px', padding: '10px 14px', marginBottom: '12px', fontWeight: 600 }}>
+                ✓ {mensajeExito}
+              </div>
+            )}
 
             {/* Tipo sanguíneo */}
             <div className="mreg-u-field-group">

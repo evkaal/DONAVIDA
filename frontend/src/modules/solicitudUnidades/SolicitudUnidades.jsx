@@ -5,9 +5,13 @@ import ModalPrevisualizacion from './ModalPrevisualizacion';
 import { crearSolicitud } from '../../services/solicitudesService';
 
 export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }) {
-  // Datos del solicitante tomados de la sesión
-  const institucionSesion = usuario?.institucion || 'Hospital General';
-  const solicitanteSesion = usuario?.nombre || 'Elena Ruiz';
+  // Datos del solicitante tomados de la sesión. Sin fallbacks inventados:
+  // si el usuario no tiene institución, se muestra "Sin institución" y el
+  // formulario queda deshabilitado (el backend tampoco aceptaría la solicitud).
+  const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
+  const institucionSesion = usuarioSesion?.institucion || 'Sin institución';
+  const solicitanteSesion = usuarioSesion?.nombre || 'Sin sesión';
+  const sinInstitucion = !usuarioSesion?.institucion_id;
 
   const [prioridad, setPrioridad] = useState('critica'); // 'critica' | 'urgente' | 'normal'
   const [motivo, setMotivo] = useState('');
@@ -73,10 +77,9 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
 
   const handleConfirmarEnvio = async () => {
     if (enviando || unidades.length === 0) return;
-    const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
-    const institucionId = usuarioSesion?.institucion_id || localStorage.getItem('institucion_id');
+    const institucionId = usuarioSesion?.institucion_id;
     if (!institucionId) {
-      alert('No se pudo determinar tu institución. Vuelve a iniciar sesión.');
+      alert('Tu usuario no tiene institución asignada. Pide al administrador general que te asigne una institución.');
       return;
     }
     setEnviando(true);
@@ -129,6 +132,13 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
               <p>Crea una solicitud de emergencia a la red de bancos de sangre</p>
             </div>
           </section>
+
+          {/* Aviso cuando el usuario no tiene institución asignada */}
+          {sinInstitucion && (
+            <div style={{ background: '#fef3c7', border: '1px solid #fbbf24', color: '#92400e', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '0.95rem' }}>
+              <strong>Sin institución asignada.</strong> Pide al administrador general que te asigne una institución.
+            </div>
+          )}
 
           <div className="sol-layout-grid">
             <div className="sol-form-column">
@@ -183,6 +193,7 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
                       type="button"
                       className={`sol-priority-card card-critica ${prioridad === 'critica' ? 'active' : ''}`}
                       onClick={() => setPrioridad('critica')}
+                      disabled={sinInstitucion}
                     >
                       <span className="sol-radio-indicator">
                         <span className="sol-radio-dot"></span>
@@ -196,6 +207,7 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
                       type="button"
                       className={`sol-priority-card card-urgente ${prioridad === 'urgente' ? 'active' : ''}`}
                       onClick={() => setPrioridad('urgente')}
+                      disabled={sinInstitucion}
                     >
                       <span className="sol-radio-indicator">
                         <span className="sol-radio-dot"></span>
@@ -209,6 +221,7 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
                       type="button"
                       className={`sol-priority-card card-normal ${prioridad === 'normal' ? 'active' : ''}`}
                       onClick={() => setPrioridad('normal')}
+                      disabled={sinInstitucion}
                     >
                       <span className="sol-radio-indicator">
                         <span className="sol-radio-dot"></span>
@@ -228,6 +241,7 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
                     placeholder="Describe el motivo de la solicitud (urgencia médica, paciente en quirófano, reposición inmediata, etc.)..."
                     value={motivo}
                     onChange={(e) => setMotivo(e.target.value)}
+                    disabled={sinInstitucion}
                   ></textarea>
                 </div>
               </section>
@@ -243,6 +257,7 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
                     type="button"
                     className="btn-add-unit"
                     onClick={handleAgregarUnidad}
+                    disabled={sinInstitucion}
                   >
                     + Agregar unidad
                   </button>
@@ -418,7 +433,7 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
                     type="button"
                     className="btn-preview-sol"
                     onClick={handlePrevisualizar}
-                    disabled={unidades.length === 0}
+                    disabled={unidades.length === 0 || sinInstitucion}
                   >
                     <span className="btn-icon">
                       <img src="/assets/iconos_login/ojo.png" alt="" />

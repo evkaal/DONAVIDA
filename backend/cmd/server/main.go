@@ -87,6 +87,7 @@ func main() {
 	})
 
 	// Rutas de dashboard y stock
+	mux.HandleFunc("/api/admin/resumen", handlers.GetAdminResumen)
 	mux.HandleFunc("/api/dashboard/stats", handlers.GetDashboardStats)
 	mux.HandleFunc("/api/dashboard/stock-tipos", handlers.GetStockPorTipo)
 	mux.HandleFunc("/api/solicitudes/recientes", handlers.GetSolicitudesRecientes)
@@ -123,6 +124,7 @@ func main() {
 	mux.HandleFunc("/api/catalogos/colonias", handlers.GetColonias)
 	mux.HandleFunc("/api/catalogos/tipos-sangre", handlers.GetTiposSangre)
 	mux.HandleFunc("/api/catalogos/hemocomponentes", handlers.GetHemocomponentes)
+	mux.HandleFunc("/api/catalogos/roles", handlers.GetRoles)
 
 	// Ruta unificada para instituciones (GET para listar, POST para registrar)
 	mux.HandleFunc("/api/instituciones", func(w http.ResponseWriter, r *http.Request) {

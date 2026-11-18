@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"donavida-backend/internal/database"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -34,12 +35,22 @@ func parseInstID(r *http.Request) int {
 	return n
 }
 
-// userIDFromToken decodifica el JWT del header Authorization y resuelve el
-// id del usuario por su email. Devuelve 0 si no hay token válido.
-func userIDFromToken(r *http.Request) int {
+// sesionUsuario resume lo que el backend necesita saber del usuario
+// logueado: su id, su rol y su institución. Se resuelve desde la BD por el
+// email del token (no por claims), para que los tokens ya emitidos sigan
+// funcionando.
+type sesionUsuario struct {
+	ID            int
+	RolID         int
+	InstitucionID *int
+	Email         string
+}
+
+func sesionDesdeToken(r *http.Request) (sesionUsuario, bool) {
+	var s sesionUsuario
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
-		return 0
+		return s, false
 	}
 	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 	c := &claims{}
@@ -47,13 +58,39 @@ func userIDFromToken(r *http.Request) int {
 		return jwtKey, nil
 	})
 	if err != nil || !token.Valid || c.Email == "" {
-		return 0
+		return s, false
 	}
-	var id int
-	if err := database.DB.QueryRow(`SELECT id FROM usuarios WHERE email = $1`, c.Email).Scan(&id); err != nil {
-		return 0
+	var instID sql.NullInt64
+	err = database.DB.QueryRow(`SELECT id, rol_id, institucion_id FROM usuarios WHERE email = $1`, c.Email).Scan(&s.ID, &s.RolID, &instID)
+	if err != nil {
+		return s, false
 	}
-	return id
+	if instID.Valid {
+		v := int(instID.Int64)
+		s.InstitucionID = &v
+	}
+	s.Email = c.Email
+	return s, true
+}
+
+// institucionParaConsulta resuelve a qué institución se limitan las
+// consultas de listado:
+//   - admin general (rol_id 1): respeta ?institucion_id= (0 o ausente = todas).
+//   - rol 2/3: siempre su propia institución del JWT; el query param se ignora.
+//   - sin sesión o sin institución: -1 (ninguna). El llamador debe devolver
+//     lista vacía y nunca todas las instituciones.
+func institucionParaConsulta(r *http.Request) int {
+	sesion, ok := sesionDesdeToken(r)
+	if !ok {
+		return -1
+	}
+	if sesion.RolID == 1 {
+		return parseInstID(r)
+	}
+	if sesion.InstitucionID == nil {
+		return -1
+	}
+	return *sesion.InstitucionID
 }
 
 // splitTipoSangre separa "AB+" en ("AB", "+") y "O-" en ("O", "-").
@@ -113,7 +150,14 @@ func GetUnidades(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
 		return
 	}
-	instID := parseInstID(r)
+	// La institución se resuelve desde el JWT (ver institucionParaConsulta):
+	// un admin_institucion solo ve las unidades de su institución y un
+	// usuario sin institución ve lista vacía, nunca todas.
+	instID := institucionParaConsulta(r)
+	if instID == -1 {
+		writeJSON(w, http.StatusOK, []UnidadResponse{})
+		return
+	}
 	rows, err := database.DB.Query(`
 		SELECT h.codigo_unidad,
 		       ts.grupo_abo || ts.factor_rh AS tipo,
@@ -186,6 +230,9 @@ type unidadCaducar struct {
 
 var ordenTiposSangre = []string{"A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"}
 
+// diasCaducidadStock es la ventana en días para "próximas a caducar".
+const diasCaducidadStock = 7
+
 // columnaHemo clasifica un componente del catálogo en una de las 4 columnas
 // de la matriz. Devuelve "" si no pertenece a ninguna.
 func columnaHemo(componente string) string {
@@ -209,8 +256,29 @@ func GetStock(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
 		return
 	}
-	instID := parseInstID(r)
-	const diasCaducidad = 7
+	// La institución se resuelve desde el JWT (ver institucionParaConsulta).
+	instID := institucionParaConsulta(r)
+	if instID == -1 {
+		// Sin sesión o sin institución: stock vacío, nunca el global.
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"kpis": map[string]interface{}{
+				"unidadesDisponibles":   0,
+				"tiposConExistencia":    0,
+				"bajoMinimo":            0,
+				"totalCombinaciones":    len(ordenTiposSangre) * 4,
+				"sinExistencias":        0,
+				"detalleSinExistencias": "Sin incidencias",
+				"porCaducar":            0,
+				"diasCaducidad":         diasCaducidadStock,
+			},
+			"matriz":          []filaMatriz{},
+			"totalesColumnas": map[string]int{"sangreTotal": 0, "concEritrocitario": 0, "plasmaFresco": 0, "plaquetas": 0, "granTotal": 0},
+			"alertas":         []alertaStock{},
+			"proximasCaducar": []unidadCaducar{},
+		})
+		return
+	}
+	const diasCaducidad = diasCaducidadStock
 
 	// 1. Tipos de sangre (orden fijo A+, A-, B+, B-, AB+, AB-, O+, O-)
 	tipoIDs := map[string]int{}
@@ -465,9 +533,27 @@ func CrearSolicitud(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error al leer los datos de la solicitud", http.StatusBadRequest)
 		return
 	}
-	if input.InstitucionID <= 0 {
-		http.Error(w, "institucion_id es obligatorio", http.StatusBadRequest)
+	// La institución solicitante se resuelve desde el JWT, no del body:
+	// admin general (rol_id 1) puede indicar institucion_id; rol 2/3 siempre
+	// usan su propia institución; sin institución no se puede solicitar.
+	sesion, ok := sesionDesdeToken(r)
+	if !ok {
+		http.Error(w, "Token de autorización requerido", http.StatusUnauthorized)
 		return
+	}
+	var institucionID int
+	if sesion.RolID == 1 {
+		if input.InstitucionID <= 0 {
+			http.Error(w, "institucion_id es obligatorio", http.StatusBadRequest)
+			return
+		}
+		institucionID = input.InstitucionID
+	} else {
+		if sesion.InstitucionID == nil {
+			http.Error(w, "Tu usuario no tiene institución asignada. Pide al administrador general que te asigne una institución.", http.StatusBadRequest)
+			return
+		}
+		institucionID = *sesion.InstitucionID
 	}
 	if len(input.Unidades) == 0 {
 		http.Error(w, "La solicitud debe incluir al menos una unidad", http.StatusBadRequest)
@@ -494,14 +580,9 @@ func CrearSolicitud(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Usuario solicitante: del JWT si viene; si no, 1 como fallback
-	// (el usuario admin general sembrado). Documentado: en producción el
-	// frontend siempre envía el token, así que el fallback solo cubre
-	// llamadas sin sesión.
-	usuarioID := userIDFromToken(r)
-	if usuarioID == 0 {
-		usuarioID = 1
-	}
+	// Usuario solicitante: el del JWT (ya validado arriba). Sin el
+	// fallback a 1 de antes: una solicitud sin sesión no se crea.
+	usuarioID := sesion.ID
 
 	tx, err := database.DB.Begin()
 	if err != nil {
@@ -515,7 +596,7 @@ func CrearSolicitud(w http.ResponseWriter, r *http.Request) {
 		INSERT INTO solicitudes_emergencia
 		  (institucion_solicitante_id, usuario_solicitante_id, prioridad_id, estado_id, motivo)
 		VALUES ($1, $2, $3, $4, $5) RETURNING id
-	`, input.InstitucionID, usuarioID, prioridadID, estadoID, input.Motivo).Scan(&solicitudID)
+	`, institucionID, usuarioID, prioridadID, estadoID, input.Motivo).Scan(&solicitudID)
 	if err != nil {
 		log.Printf("Error al crear solicitud: %v", err)
 		http.Error(w, "Error al crear la solicitud: "+err.Error(), http.StatusInternalServerError)
@@ -619,7 +700,13 @@ func GetSolicitudesEntrantes(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
 		return
 	}
-	instID := parseInstID(r)
+	// La institución se resuelve desde el JWT (ver institucionParaConsulta):
+	// entrantes = solicitudes de OTRAS instituciones, pendientes de atender.
+	instID := institucionParaConsulta(r)
+	if instID == -1 {
+		writeJSON(w, http.StatusOK, []solicitudEntrante{})
+		return
+	}
 	rows, err := database.DB.Query(`
 		SELECT s.id, i.nombre AS institucion, u.nombre AS solicitante,
 		       COALESCE(i.telefono, '') AS telefono,
@@ -755,6 +842,7 @@ type solicitudHistorico struct {
 	Solicitada  string `json:"solicitada"`
 	Cerrada     string `json:"cerrada"`
 	Estado      string `json:"estado"`
+	Fecha       string `json:"fecha"` // YYYY-MM-DD, para el filtro de fechas del frontend
 }
 
 func GetHistorico(w http.ResponseWriter, r *http.Request) {
@@ -762,13 +850,27 @@ func GetHistorico(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
 		return
 	}
-	instID := parseInstID(r)
+	// La institución se resuelve desde el JWT (ver institucionParaConsulta).
+	instID := institucionParaConsulta(r)
+	if instID == -1 {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"total":       0,
+			"conteos":     map[string]int{"todas": 0, "enviadas": 0, "recibidas": 0},
+			"solicitudes": []solicitudHistorico{},
+		})
+		return
+	}
 	tipoFiltro := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("tipo")))
 	estadoFiltro := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("estado")))
 
 	// Histórico = todas las solicitudes. El tipo es 'enviada' cuando la
 	// institución del parámetro es la solicitante y 'recibida' en caso
 	// contrario, así que no se filtra por institución en el WHERE.
+	// Regla para admin general (institucion_id = 0, sin institución propia):
+	// el tipo se calcula por el TIPO de la institución solicitante:
+	// 'enviada' si tipos_institucion.nombre es hospital o clínica
+	// (los hospitales/clínicas son quienes envían solicitudes),
+	// 'recibida' si es banco de sangre (los bancos las reciben).
 	rows, err := database.DB.Query(`
 		SELECT s.id, i.nombre AS institucion,
 		       LOWER(np.nombre) AS prioridad,
@@ -776,13 +878,21 @@ func GetHistorico(w http.ResponseWriter, r *http.Request) {
 		       TO_CHAR(s.fecha_solicitud, 'DD Mon · HH24:MI') AS solicitada,
 		       COALESCE(TO_CHAR(s.fecha_cierre, 'DD Mon · HH24:MI'), '') AS cerrada,
 		       LOWER(es.nombre) AS estado,
-		       CASE WHEN s.institucion_solicitante_id = $1 THEN 'enviada' ELSE 'recibida' END AS tipo
+		       TO_CHAR(s.fecha_solicitud, 'YYYY-MM-DD') AS fecha_iso,
+		       CASE
+		         WHEN $1 <> 0 AND s.institucion_solicitante_id = $1 THEN 'enviada'
+		         WHEN $1 <> 0 THEN 'recibida'
+		         WHEN ti.nombre ILIKE '%banco%' THEN 'recibida'
+		         WHEN ti.nombre ILIKE '%hospital%' OR ti.nombre ILIKE '%clinica%' OR ti.nombre ILIKE '%clínica%' THEN 'enviada'
+		         ELSE 'recibida'
+		       END AS tipo
 		FROM solicitudes_emergencia s
 		JOIN instituciones i ON s.institucion_solicitante_id = i.id
+		JOIN tipos_institucion ti ON i.tipo_institucion_id = ti.id
 		JOIN niveles_prioridad np ON s.prioridad_id = np.id
 		JOIN estados_solicitud es ON s.estado_id = es.id
 		LEFT JOIN solicitud_detalles sd ON sd.solicitud_id = s.id
-		GROUP BY s.id, i.nombre, np.nombre, s.fecha_solicitud, s.fecha_cierre, es.nombre, s.institucion_solicitante_id
+		GROUP BY s.id, i.nombre, ti.nombre, np.nombre, s.fecha_solicitud, s.fecha_cierre, es.nombre, s.institucion_solicitante_id
 		ORDER BY s.fecha_solicitud DESC
 	`, instID)
 	if err != nil {
@@ -797,7 +907,7 @@ func GetHistorico(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var s solicitudHistorico
 		var numID int
-		if err := rows.Scan(&numID, &s.Institucion, &s.Prioridad, &s.Unidades, &s.Solicitada, &s.Cerrada, &s.Estado, &s.Tipo); err != nil {
+		if err := rows.Scan(&numID, &s.Institucion, &s.Prioridad, &s.Unidades, &s.Solicitada, &s.Cerrada, &s.Estado, &s.Fecha, &s.Tipo); err != nil {
 			continue
 		}
 		s.ID = fmt.Sprintf("SOL-%04d", numID)

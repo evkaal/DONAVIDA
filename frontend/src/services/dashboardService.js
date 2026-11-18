@@ -48,3 +48,18 @@ export const getSolicitudesRecientes = async () => {
 
 
 
+
+export const getAdminResumen = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await api.get('/admin/resumen', {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error al obtener el resumen de admin:", error);
+    throw error;
+  }
+};

@@ -17,6 +17,10 @@ export default function ModalRegistrarInsti({ isOpen, onClose, onSaveSuccess }) 
   const [tipoInstitucionId, setTipoInstitucionId] = useState(1);
   const [colonias, setColonias] = useState([]);
   const [coloniaId, setColoniaId] = useState('');
+  // 'nueva' = el usuario escribe la colonia manualmente.
+  const [coloniaNuevaNombre, setColoniaNuevaNombre] = useState('');
+  // Código postal EDITABLE: prellenado con el CP de la colonia elegida.
+  const [codigoPostal, setCodigoPostal] = useState('');
   const [activa, setActiva] = useState(true);
   const [cargando, setCargando] = useState(false);
 
@@ -33,22 +37,43 @@ export default function ModalRegistrarInsti({ isOpen, onClose, onSaveSuccess }) 
         setTipoInstitucionId(tiposData[0].id);
       }
       setColonias(coloniasData);
-      if (coloniasData.length > 0) setColoniaId(String(coloniasData[0].id));
+      if (coloniasData.length > 0) {
+        setColoniaId(String(coloniasData[0].id));
+        setCodigoPostal(coloniasData[0].codigo_postal || '');
+      } else {
+        setColoniaId('nueva');
+      }
     };
     cargar();
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const coloniaSeleccionada = colonias.find((c) => String(c.id) === String(coloniaId));
-  const codigoPostal = coloniaSeleccionada?.codigo_postal || '';
+  const coloniaSeleccionada = coloniaId === 'nueva' ? null : colonias.find((c) => String(c.id) === String(coloniaId));
+
+  const elegirColonia = (valor) => {
+    setColoniaId(valor);
+    if (valor === 'nueva') {
+      setCodigoPostal('');
+    } else {
+      const sel = colonias.find((c) => String(c.id) === String(valor));
+      setCodigoPostal(sel?.codigo_postal || '');
+    }
+  };
 
   const limpiar = () => {
     setNombre('');
     setTelefono('');
     setCalleNumero('');
     setActiva(true);
-    if (colonias.length > 0) setColoniaId(String(colonias[0].id));
+    setColoniaNuevaNombre('');
+    if (colonias.length > 0) {
+      setColoniaId(String(colonias[0].id));
+      setCodigoPostal(colonias[0].codigo_postal || '');
+    } else {
+      setColoniaId('nueva');
+      setCodigoPostal('');
+    }
     if (tipos.length > 0) setTipoInstitucionId(tipos[0].id);
   };
 
@@ -57,20 +82,39 @@ export default function ModalRegistrarInsti({ isOpen, onClose, onSaveSuccess }) 
       alert('Por favor completa todos los campos requeridos.');
       return;
     }
+    // La colonia se puede elegir de la lista o escribirse manualmente.
+    // El código postal siempre es editable (5 dígitos).
+    if (!/^[0-9]{5}$/.test(codigoPostal.trim())) {
+      alert('El código postal debe tener 5 dígitos.');
+      return;
+    }
+    if (coloniaId === 'nueva' && !coloniaNuevaNombre.trim()) {
+      alert('Escribe el nombre de la colonia nueva.');
+      return;
+    }
     if (!coloniaId) {
-      alert('No hay colonias en el catálogo. Pídele al administrador que registre colonias primero.');
+      alert('Elige una colonia o agrega una nueva.');
       return;
     }
     setCargando(true);
     try {
-      await registrarInstitucion({
+      // Si la colonia es nueva: se crea en la BD (nombre + CP).
+      // Si se cambió el CP de una colonia existente: el backend NO la
+      // sobrescribe, crea una colonia nueva con ese nombre + el nuevo CP.
+      const payload = {
         nombre: nombre.trim(),
         tipo_institucion_id: Number(tipoInstitucionId),
-        colonia_id: Number(coloniaId),
         telefono: telefono.trim(),
         calle_numero: calleNumero.trim(),
+        codigo_postal: codigoPostal.trim(),
         activo: activa,
-      });
+      };
+      if (coloniaId === 'nueva') {
+        payload.colonia_nombre = coloniaNuevaNombre.trim();
+      } else {
+        payload.colonia_id = Number(coloniaId);
+      }
+      await registrarInstitucion(payload);
       if (onSaveSuccess) onSaveSuccess();
       if (guardarOtra) {
         limpiar();
@@ -146,18 +190,33 @@ export default function ModalRegistrarInsti({ isOpen, onClose, onSaveSuccess }) 
                 <select
                   className="select-field-modal"
                   value={coloniaId}
-                  onChange={(e) => setColoniaId(e.target.value)}
+                  onChange={(e) => elegirColonia(e.target.value)}
                   required
                 >
-                  {colonias.length === 0 && <option value="">Sin colonias registradas</option>}
+                  {colonias.length === 0 && <option value="nueva">+ Agregar nueva colonia…</option>}
                   {colonias.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.nombre} ({c.codigo_postal})
                     </option>
                   ))}
+                  <option value="nueva">+ Agregar nueva colonia…</option>
                 </select>
               </div>
             </div>
+
+            {coloniaId === 'nueva' && (
+              <div className="form-group-modal">
+                <label className="form-label-modal">Nombre de la colonia nueva</label>
+                <input
+                  type="text"
+                  className="input-field-modal"
+                  placeholder="Ej. Centro"
+                  value={coloniaNuevaNombre}
+                  onChange={(e) => setColoniaNuevaNombre(e.target.value)}
+                  required
+                />
+              </div>
+            )}
 
             <div className="form-group-modal">
               <label className="form-label-modal">Tipo de institución</label>
@@ -181,14 +240,16 @@ export default function ModalRegistrarInsti({ isOpen, onClose, onSaveSuccess }) 
             <div className="form-row-modal">
               <div className="form-group-modal">
                 <label className="form-label-modal">
-                  Código postal <span className="badge-tag-modal">Según la colonia</span>
+                  Código postal <span className="badge-tag-modal">Editable</span>
                 </label>
                 <input
                   type="text"
-                  className="input-field-modal input-readonly-modal"
+                  className="input-field-modal"
                   value={codigoPostal}
-                  readOnly
-                  placeholder="Se asigna según la colonia"
+                  onChange={(e) => setCodigoPostal(e.target.value.replace(/[^0-9]/g, '').slice(0, 5))}
+                  placeholder="Ej. 68000"
+                  maxLength={5}
+                  inputMode="numeric"
                 />
               </div>
 

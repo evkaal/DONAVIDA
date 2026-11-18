@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './RegistroUnidades.css';
 import ModalRegistroUnidad from './ModalRegistroUnidad';
+import { Sidebar } from '../../components/layout';
 import { getUnidades } from '../../services/unidadesService';
 
 export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout }) {
@@ -15,9 +16,18 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
   const [unidades, setUnidades] = useState([]);
 
   const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
-  const institucionIdSesion = usuarioSesion?.institucion_id || localStorage.getItem('institucion_id');
+  // La institución es solo la de la sesión (del JWT/login). Sin fallback a
+  // localStorage ni a otra institución: un usuario sin institución no ve
+  // unidades de nadie, ve el aviso de "Sin institución asignada".
+  const institucionIdSesion = usuarioSesion?.institucion_id ?? null;
+  const esAdminGeneral = usuarioSesion?.rol_id === 1;
+  const sinInstitucion = !esAdminGeneral && !institucionIdSesion;
 
   const cargarUnidades = async () => {
+    if (sinInstitucion) {
+      setUnidades([]);
+      return;
+    }
     try {
       const data = await getUnidades(institucionIdSesion);
       const lista = Array.isArray(data) ? data : [];
@@ -54,6 +64,12 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
 
   return (
     <div className="dona-page-wrapper" style={{ width: '100%' }}>
+      <Sidebar
+        usuario={usuario}
+        moduloActivo="registro"
+        onCambiarModulo={onCambiarModulo}
+        onLogout={onLogout}
+      />
       {/* ÁREA PRINCIPAL */}
       <div className="dona-main-area" style={{ width: '100%', margin: 0 }}>
         <main className="dona-content-body">
@@ -69,6 +85,8 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
               type="button"
               className="btn-open-modal-reg"
               onClick={() => setIsModalOpen(true)}
+              disabled={sinInstitucion}
+              title={sinInstitucion ? 'Tu usuario no tiene institución asignada' : undefined}
             >
               <span className="reg-action-icon">
                 <img src="/assets/iconos_registroU/agregar.png" alt="" />
@@ -76,6 +94,13 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
               <span>Registrar unidad</span>
             </button>
           </section>
+
+          {/* Aviso cuando el usuario no tiene institución asignada */}
+          {sinInstitucion && (
+            <div style={{ background: '#fef3c7', border: '1px solid #fbbf24', color: '#92400e', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '0.95rem' }}>
+              <strong>Sin institución asignada.</strong> Pide al administrador general que te asigne una institución.
+            </div>
+          )}
 
           {/* Tarjeta de Tabla y Filtros */}
           <section className="reg-table-card">
