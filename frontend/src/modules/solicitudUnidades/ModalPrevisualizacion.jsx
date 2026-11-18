@@ -237,7 +237,7 @@ export default function ModalPrevisualizacion({
               disabled={unidades.length === 0}
             >
               <span className='mprev-enviar-icon'>
-                <img src="/src/assets/iconos_dash/avion-de-papel2.png" alt="" />
+                <img src="/assets/iconos_dash/avion-de-papel2.png" alt="" />
               </span>
               <span>Enviar solicitud</span>
             </button>

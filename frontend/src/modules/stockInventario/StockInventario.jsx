@@ -93,7 +93,7 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
             <div className="stock-header-actions">
               <div className="stock-hospital-selector-wrapper">
                 <span className="stock-hospital-icon">
-                  <img src="/src/assets/iconos_registroU/edificio.png" alt="Icono de hospital" />
+                  <img src="/assets/iconos_registroU/edificio.png" alt="Icono de hospital" />
                 </span>
                 <select
                   className="stock-hospital-select"
@@ -112,7 +112,7 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
                 onClick={() => setIsModalAlertasOpen(true)}
               >
                 <span className="stock-action-icon">
-                  <img src="/src/assets/iconos_stockU/ajustes.png" alt="Icono de configuración" />
+                  <img src="/assets/iconos_stockU/ajustes.png" alt="Icono de configuración" />
                 </span>
                 <span>Configurar mínimos</span>
               </button>
@@ -126,7 +126,7 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
               <div className="stock-kpi-header">
                 <span className="stock-kpi-label">Unidades disponibles</span>
                 <span className="stock-kpi-badge badge-blood">
-                  <img src="/src/assets/iconos_dash/sangre.png" alt="Sangre" className="stock-kpi-icon-img" />
+                  <img src="/assets/iconos_dash/sangre.png" alt="Sangre" className="stock-kpi-icon-img" />
                 </span>
               </div>
               <div className="stock-kpi-value">{kpis.unidadesDisponibles}</div>
@@ -138,7 +138,7 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
               <div className="stock-kpi-header">
                 <span className="stock-kpi-label">Bajo el mínimo</span>
                 <span className="stock-kpi-badge badge-warning">
-                  <img src="/src/assets/iconos_dash/advertencia.png" alt="Alerta" className="stock-kpi-icon-img" />
+                  <img src="/assets/iconos_dash/advertencia.png" alt="Alerta" className="stock-kpi-icon-img" />
                 </span>
               </div>
               <div className="stock-kpi-value">{kpis.bajoMinimo}</div>
@@ -152,7 +152,7 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
               <div className="stock-kpi-header">
                 <span className="stock-kpi-label">Sin existencias</span>
                 <span className="stock-kpi-badge badge-danger">
-                  <img src="/src/assets/iconos_stockU/prohibido.png" alt="Prohibido" className="stock-kpi-icon-img" />
+                  <img src="/assets/iconos_stockU/prohibido.png" alt="Prohibido" className="stock-kpi-icon-img" />
                 </span>
               </div>
               <div className="stock-kpi-value">{kpis.sinExistencias}</div>
@@ -164,7 +164,7 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
               <div className="stock-kpi-header">
                 <span className="stock-kpi-label">Por caducar</span>
                 <span className="stock-kpi-badge badge-clock">
-                  <img src="/src/assets/iconos_dash/reloj.png" alt="Reloj" className="stock-kpi-icon-img" />
+                  <img src="/assets/iconos_dash/reloj.png" alt="Reloj" className="stock-kpi-icon-img" />
                 </span>
               </div>
               <div className="stock-kpi-value">{kpis.porCaducar}</div>
@@ -300,17 +300,17 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
                       <div className="stock-alert-icon-col">
                         {alerta.tipoAlerta === 'critica' && (
                           <div className="stock-alert-icon-badge alert-critica">
-                            <img src="/src/assets/iconos_stockU/prohibido.png" alt="Prohibido" className="stock-kpi-icon-img" />
+                            <img src="/assets/iconos_stockU/prohibido.png" alt="Prohibido" className="stock-kpi-icon-img" />
                           </div>
                         )}
                         {alerta.tipoAlerta === 'advertencia' && (
                           <div className="stock-alert-icon-badge alert-advertencia">
-                            <img src="/src/assets/iconos_dash/advertencia.png" alt="Advertencia" className="stock-kpi-icon-img" />
+                            <img src="/assets/iconos_dash/advertencia.png" alt="Advertencia" className="stock-kpi-icon-img" />
                           </div>
                         )}
                         {alerta.tipoAlerta === 'caducidad' && (
                           <div className="stock-alert-icon-badge alert-caducidad">
-                            <img src="/src/assets/iconos_dash/reloj.png" alt="Reloj" className="stock-kpi-icon-img" />
+                            <img src="/assets/iconos_dash/reloj.png" alt="Reloj" className="stock-kpi-icon-img" />
                           </div>
                         )}
                       </div>

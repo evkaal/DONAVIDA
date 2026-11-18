@@ -92,7 +92,7 @@ export default function Dashboard({ usuario, onLogout }) {
                     >
                       <span className="dash-action-icon">
                         <img
-                          src="/src/assets/iconos_dash/agregar-usuario.png"
+                          src="/assets/iconos_dash/agregar-usuario.png"
                           alt="Gestión de usuarios"
                           className="dash-nav-icon-img"
                         />
@@ -108,7 +108,7 @@ export default function Dashboard({ usuario, onLogout }) {
                       >
                         <span className="dash-action-icon">
                           <img
-                            src="/src/assets/iconos_dash/agregar.png"
+                            src="/assets/iconos_dash/agregar.png"
                             alt="Registrar unidad"
                             className="dash-nav-icon-img"
                           />
@@ -119,7 +119,7 @@ export default function Dashboard({ usuario, onLogout }) {
                       <button type="button" className="dash-btn-primary">
                         <span className="dash-action-icon">
                           <img
-                            src="/src/assets/iconos_dash/avion-de-papel2.png"
+                            src="/assets/iconos_dash/avion-de-papel2.png"
                             alt="Nueva solicitud"
                             className="dash-nav-icon-img"
                           />
@@ -140,7 +140,7 @@ export default function Dashboard({ usuario, onLogout }) {
                         <span className="dash-kpi-title">Stock total</span>
                         <div className="dash-kpi-icon-badge badge-red-subtle">
                           <img
-                            src="/src/assets/iconos_dash/sangre.png"
+                            src="/assets/iconos_dash/sangre.png"
                             alt="Stock total"
                             className="dash-nav-icon-img"
                           />
@@ -163,7 +163,7 @@ export default function Dashboard({ usuario, onLogout }) {
                         <span className="dash-kpi-title">Próximas a caducar</span>
                         <div className="dash-kpi-icon-badge badge-orange-subtle">
                           <img
-                            src="/src/assets/iconos_dash/reloj.png"
+                            src="/assets/iconos_dash/reloj.png"
                             alt="Próximas a caducar"
                             className="dash-nav-icon-img"
                           />
@@ -186,7 +186,7 @@ export default function Dashboard({ usuario, onLogout }) {
                         </span>
                         <div className="dash-kpi-icon-badge badge-crimson-subtle">
                           <img
-                            src="/src/assets/iconos_dash/advertencia.png"
+                            src="/assets/iconos_dash/advertencia.png"
                             alt="Tipos en nivel crítico"
                             className="dash-nav-icon-img"
                           />
@@ -209,7 +209,7 @@ export default function Dashboard({ usuario, onLogout }) {
                         </span>
                         <div className="dash-kpi-icon-badge badge-blue-subtle">
                           <img
-                            src="/src/assets/iconos_dash/usuarios.png"
+                            src="/assets/iconos_dash/usuarios.png"
                             alt="Usuarios registrados"
                             className="dash-nav-icon-img"
                           />
@@ -234,7 +234,7 @@ export default function Dashboard({ usuario, onLogout }) {
                         </span>
                         <div className="dash-kpi-icon-badge badge-red-subtle">
                           <img
-                            src="/src/assets/iconos_dash/sangre.png"
+                            src="/assets/iconos_dash/sangre.png"
                             alt="Unidades disponibles"
                             className="dash-nav-icon-img"
                           />
@@ -257,7 +257,7 @@ export default function Dashboard({ usuario, onLogout }) {
                         <span className="dash-kpi-title">Próximas a caducar</span>
                         <div className="dash-kpi-icon-badge badge-orange-subtle">
                           <img
-                            src="/src/assets/iconos_dash/reloj.png"
+                            src="/assets/iconos_dash/reloj.png"
                             alt="Próximas a caducar"
                             className="dash-nav-icon-img"
                           />
@@ -280,7 +280,7 @@ export default function Dashboard({ usuario, onLogout }) {
                         </span>
                         <div className="dash-kpi-icon-badge badge-blue-subtle">
                           <img
-                            src="/src/assets/iconos_dash/bandeja.png"
+                            src="/assets/iconos_dash/bandeja.png"
                             alt="Solicitudes pendientes"
                             className="dash-nav-icon-img"
                           />
@@ -303,7 +303,7 @@ export default function Dashboard({ usuario, onLogout }) {
                         <span className="dash-kpi-title">Niveles críticos</span>
                         <div className="dash-kpi-icon-badge badge-crimson-subtle">
                           <img
-                            src="/src/assets/iconos_dash/advertencia.png"
+                            src="/assets/iconos_dash/advertencia.png"
                             alt="Niveles críticos"
                             className="dash-nav-icon-img"
                           />

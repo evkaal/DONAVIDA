@@ -55,7 +55,7 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
               onClick={() => setIsModalOpen(true)}
             >
               <span className="reg-action-icon">
-                <img src="/src/assets/iconos_registroU/agregar.png" alt="" />
+                <img src="/assets/iconos_registroU/agregar.png" alt="" />
               </span>
               <span>Registrar unidad</span>
             </button>
@@ -67,7 +67,7 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
             <div className="reg-filters-toolbar">
               <div className="reg-search-input-wrapper">
                 <span className="reg-search-icon">
-                  <img src="/src/assets/iconos_sidenavbar/busqueda.png" alt="" />
+                  <img src="/assets/iconos_sidenavbar/busqueda.png" alt="" />
                 </span>
                 <input
                   type="text"

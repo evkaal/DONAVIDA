@@ -120,7 +120,7 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
                 </label>
                 <div className="mreg-u-input-wrapper mreg-u-readonly-box">
                   <span className="mreg-u-input-icon-left">
-                    <img src="/src/assets/iconos_registroU/edificio.png" alt="" />
+                    <img src="/assets/iconos_registroU/edificio.png" alt="" />
                   </span>
                   <input
                     type="text"
@@ -129,7 +129,7 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
                     readOnly
                   />
                   <span className="mreg-u-input-icon-right">
-                    <img src="/src/assets/iconos_gestionU/cerrar.png" alt="" />
+                    <img src="/assets/iconos_gestionU/cerrar.png" alt="" />
                   </span>
                 </div>
               </div>
@@ -151,7 +151,7 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
                     readOnly
                   />
                   <span className="mreg-u-input-icon-right">
-                    <img src="/src/assets/iconos_gestionU/cerrar.png" alt="" />
+                    <img src="/assets/iconos_gestionU/cerrar.png" alt="" />
                   </span>
                 </div>
               </div>
@@ -278,14 +278,14 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
               disabled={cargando}
             >
               <span className="mreg-action-icon">
-                <img src="/src/assets/iconos_gestionU/agregar.png" alt="" />
+                <img src="/assets/iconos_gestionU/agregar.png" alt="" />
               </span>
               <span>{cargando ? 'Guardando...' : 'Guardar y agregar otra'}</span>
             </button>
 
             <button type="submit" className="btn-mreg-primary" disabled={cargando}>
               <span className="mreg-action-icon">
-                <img src="/src/assets/iconos_gestionU/aceptar.png" alt="" />
+                <img src="/assets/iconos_gestionU/aceptar.png" alt="" />
               </span>
               <span>{cargando ? 'Registrando...' : 'Registrar unidad'}</span>
             </button>

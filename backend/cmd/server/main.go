@@ -5,12 +5,43 @@ import (
 	"donavida-backend/internal/handlers"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 )
 
+// Orígenes permitidos para CORS.
+// Se pueden definir en ALLOWED_ORIGINS separados por coma, por ejemplo:
+// ALLOWED_ORIGINS=http://localhost:5173,http://159.173.138.239,https://tu-dominio.com
+// Si no se define, se usan estos valores por defecto.
+func allowedOrigins() map[string]bool {
+	origins := map[string]bool{
+		"http://localhost:5173":      true,
+		"http://127.0.0.1:5173":      true,
+		"http://159.173.138.239":     true,
+		"http://159.173.138.239:5173": true,
+		"http://159.173.138.239:8080": true,
+	}
+	if v := os.Getenv("ALLOWED_ORIGINS"); v != "" {
+		for _, o := range strings.Split(v, ",") {
+			o = strings.TrimSpace(o)
+			if o != "" {
+				origins[o] = true
+			}
+		}
+	}
+	return origins
+}
+
 // Middleware para habilitar CORS y permitir peticiones desde React (Vite)
+// tanto en local como en producción (VPS / dominio).
 func enableCORS(next http.Handler) http.Handler {
+	allowed := allowedOrigins()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+		origin := r.Header.Get("Origin")
+		if allowed[origin] {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
@@ -89,8 +120,15 @@ func main() {
 		w.Write([]byte("Bienvenido al back"))
 	})
 
-	fmt.Println("Servidor corriendo en el puerto 8080")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	fmt.Println("Servidor corriendo en el puerto " + port)
 
 	// Pasamos el enrutador (mux) a través de nuestro middleware de CORS y lo levantamos
-	http.ListenAndServe(":8080", enableCORS(mux))
+	if err := http.ListenAndServe(":"+port, enableCORS(mux)); err != nil {
+		fmt.Println("Error al iniciar el servidor:", err)
+		os.Exit(1)
+	}
 }

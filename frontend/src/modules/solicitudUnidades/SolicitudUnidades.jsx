@@ -138,11 +138,11 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
                     </div>
                     <div className="sol-readonly-input-box">
                       <span className="sol-input-icon">
-                        <img src="/src/assets/iconos_registroU/edificio.png" alt="" />
+                        <img src="/assets/iconos_registroU/edificio.png" alt="" />
                       </span>
                       <span className="sol-readonly-text">{institucionSesion}</span>
                       <span className="sol-lock-icon" title="Campo bloqueado">
-                        <img src="/src/assets/iconos_gestionU/cerrar.png" alt="" />
+                        <img src="/assets/iconos_gestionU/cerrar.png" alt="" />
                       </span>
                     </div>
                   </div>
@@ -155,11 +155,11 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
                     </div>
                     <div className="sol-readonly-input-box">
                       <span className="sol-input-icon">
-                        <img src="/src/assets/iconos_soliU/usuario.png" alt="" />
+                        <img src="/assets/iconos_soliU/usuario.png" alt="" />
                       </span>
                       <span className="sol-readonly-text">{solicitanteSesion}</span>
                       <span className="sol-lock-icon" title="Campo bloqueado">
-                        <img src="/src/assets/iconos_gestionU/cerrar.png" alt="" />
+                        <img src="/assets/iconos_gestionU/cerrar.png" alt="" />
                       </span>
                     </div>
                   </div>
@@ -411,7 +411,7 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
                     disabled={unidades.length === 0}
                   >
                     <span className="btn-icon">
-                      <img src="/src/assets/iconos_login/ojo.png" alt="" />
+                      <img src="/assets/iconos_login/ojo.png" alt="" />
                     </span>
                     <span>Previsualizar solicitud</span>
                   </button>
@@ -428,7 +428,7 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
                 {/* Aviso*/}
                 <div className="sol-summary-notice">
                   <span className="sol-notice-icon">
-                    <img src="/src/assets/iconos_soliU/campana.png" alt="" />
+                    <img src="/assets/iconos_soliU/campana.png" alt="" />
                   </span>
                   <p>Al enviar, se generará una alerta para los bancos de sangre de la red.</p>
                 </div>

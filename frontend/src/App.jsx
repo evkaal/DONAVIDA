@@ -4,6 +4,9 @@ import Dashboard from './modules/dashboard';
 import GestionUsuarios from './modules/usuarios';
 import RegistroUnidades from './modules/registroUnidades';
 import StockInventario from './modules/inventario/StockInventario';
+import Historico from './modules/historico';
+import SolicitudUnidades from './modules/solicitudUnidades';
+import SolicitudesEntrantes from './modules/solicitudesEntrantes';
 
 
 function App() {

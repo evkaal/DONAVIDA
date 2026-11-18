@@ -231,7 +231,7 @@ export default function Historico({ usuario, onCambiarModulo, onLogout }) {
                 {/* Buscador de folio / institución */}
                 <div className="hist-search-box">
                   <span className="hist-search-icon">
-                    <img src="/src/assets/iconos_sidenavbar/busqueda.png" alt="" />
+                    <img src="/assets/iconos_sidenavbar/busqueda.png" alt="" />
                   </span>
                   <input
                     type="text"
@@ -245,7 +245,7 @@ export default function Historico({ usuario, onCambiarModulo, onLogout }) {
                 {/* Filtro de Rango de Fechas */}
                 <div className="hist-custom-select-wrapper">
                   <span className="hist-select-icon">
-                    <img src="/src/assets/iconos_historico/calendario.png" alt="" />
+                    <img src="/assets/iconos_historico/calendario.png" alt="" />
                   </span>
                   <select
                     className="hist-select-filter with-icon"
@@ -280,7 +280,7 @@ export default function Historico({ usuario, onCambiarModulo, onLogout }) {
                   onClick={handleExportar}
                 >
                   <span className="hist-action-icon">
-                    <img src="/src/assets/iconos_historico/descargar.png" alt="" />
+                    <img src="/assets/iconos_historico/descargar.png" alt="" />
                   </span>
                   <span>Exportar</span>
                 </button>

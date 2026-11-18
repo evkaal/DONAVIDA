@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8080/api';
+const API_URL = 'http://159.173.138.239:8080/api';
 
 export const obtenerStockInstitucion = async (institucionId) => {
   const token = localStorage.getItem('token');
