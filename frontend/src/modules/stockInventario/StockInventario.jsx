@@ -4,6 +4,7 @@ import { Sidebar, Navbar } from '../../components/layout';
 import ModalConfigurarAlertas from './ModalConfigurarAlertas';
 import { obtenerStockInstitucion } from '../../services/stockService';
 import { obtenerInstituciones } from '../../services/usuariosService';
+import { normalizarHemocomponente } from '../../services/catalogosService';
 
 export default function StockInventario({ usuario, onCambiarModulo, onLogout }) {
   // Estado del modal de configuración de alertas y mínimos
@@ -26,7 +27,9 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
     if (Array.isArray(data.matriz)) setMatrizStock(data.matriz);
     if (data.totalesColumnas) setTotalesColumnas(data.totalesColumnas);
     if (Array.isArray(data.alertas)) setAlertasStock(data.alertas);
-    if (Array.isArray(data.proximasCaducar)) setUnidadesCaducidad(data.proximasCaducar);
+    // "Paquete globular" se muestra como "Concentrado eritrocitario":
+    // es el mismo producto (ver catalogosService).
+    if (Array.isArray(data.proximasCaducar)) setUnidadesCaducidad(data.proximasCaducar.map((u) => ({ ...u, hemocomponente: normalizarHemocomponente(u.hemocomponente) })));
   };
 
   useEffect(() => {
@@ -279,7 +282,7 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
                       </th>
                       <th>
                         <div className="th-hemo-header">
-                          <span className="th-hemo-name">Conc. eritrocitario</span>
+                          <span className="th-hemo-name">Concentrado eritrocitario</span>
                           <span className="th-hemo-sub">300 ml · 42 d</span>
                         </div>
                       </th>

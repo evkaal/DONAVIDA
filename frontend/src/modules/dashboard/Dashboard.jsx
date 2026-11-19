@@ -7,6 +7,7 @@ import {
   getSolicitudesRecientes,
   getAdminResumen,
 } from "../../services/dashboardService";
+import { obtenerStockInstitucion } from "../../services/stockService";
 
 // Dashboard es SOLO dashboard. El cambio de módulo lo resuelve App.jsx:
 // cada pantalla se renderiza desde ahí con su propio Sidebar/Navbar.
@@ -22,6 +23,8 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
     nivelesCriticos: 0,
   });
   const [adminResumen, setAdminResumen] = useState(null);
+  // Matriz de stock (GET /api/stock) para el desglose por hemocomponente.
+  const [stockMatriz, setStockMatriz] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [actividadReciente] = useState([]);
 
@@ -42,6 +45,13 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
 
         const stockData = await getStockPorTipo();
         setStockTipos(stockData || []);
+
+        // Desglose por hemocomponente: la matriz de /api/stock ya trae
+        // los conteos por columna; se suman aquí por hemocomponente
+        // (0 = toda la red para el admin general; los demás roles ven
+        // solo su institución, porque el backend ignora el parámetro).
+        const stock = await obtenerStockInstitucion(0);
+        if (stock && Array.isArray(stock.matriz)) setStockMatriz(stock.matriz);
 
         const solicitudesData = await getSolicitudesRecientes();
         setSolicitudesRecientes(solicitudesData || []);
@@ -169,7 +179,7 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
               <>
                 {kpi("Stock total", "/assets/iconos_dash/sangre.png", "Stock total", stats.totalUnidades || 0, "Unidades en inventario", "badge-red-subtle")}
                 {kpi("Próximas a caducar", "/assets/iconos_dash/reloj.png", "Próximas a caducar", stats.proximasCaducar || 0, "Próximos 7 días", "badge-orange-subtle")}
-                {kpi("Tipos en nivel crítico", "/assets/iconos_dash/advertencia.png", "Tipos en nivel crítico", stats.nivelesCriticos || 0, "Tipos sanguíneos ≤ 10 unidades", "badge-crimson-subtle")}
+                {kpi("Tipos en nivel crítico", "/assets/iconos_dash/advertencia.png", "Tipos en nivel crítico", stats.nivelesCriticos || 0, "Combinaciones bajo el mínimo", "badge-crimson-subtle")}
                 {kpi("Solicitudes pendientes", "/assets/iconos_dash/bandeja.png", "Solicitudes pendientes", stats.solicitudesPendientes || 0, "Urgentes por atender", "badge-blue-subtle")}
               </>
             ) : (
@@ -181,6 +191,34 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
               </>
             )}
           </section>
+
+          {/* DESGLOSE POR HEMOCOMPONENTE: la tarjeta "Unidades
+              disponibles" es un solo número general; aquí se ve de qué
+              es cada unidad. Se suma por columna de la matriz de
+              /api/stock (mismos conteos que la página de Stock). */}
+          {stockMatriz.length > 0 && (
+            <section className="dash-card" style={{ marginBottom: "24px" }}>
+              <div className="dash-card-header">
+                <div>
+                  <h2 className="dash-card-title">Disponibles por hemocomponente</h2>
+                  <p className="dash-card-subtitle">Unidades disponibles hoy, por tipo de componente</p>
+                </div>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", padding: "0 16px 16px" }}>
+                {[
+                  ["Sangre total", stockMatriz.reduce((a, f) => a + (f.sangreTotal?.cant || 0), 0)],
+                  ["Concentrado eritrocitario", stockMatriz.reduce((a, f) => a + (f.concEritrocitario?.cant || 0), 0)],
+                  ["Plasma fresco", stockMatriz.reduce((a, f) => a + (f.plasmaFresco?.cant || 0), 0)],
+                  ["Plaquetas", stockMatriz.reduce((a, f) => a + (f.plaquetas?.cant || 0), 0)],
+                ].map(([nombre, valor]) => (
+                  <div key={nombre} style={{ flex: "1 1 160px", backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "14px 16px" }}>
+                    <div style={{ fontSize: "0.85rem", color: "#64748b", fontWeight: "600" }}>{nombre}</div>
+                    <div style={{ fontSize: "1.5rem", fontWeight: "700", color: "#1e293b", marginTop: "4px" }}>{valor}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* SECCIÓN CENTRAL: GRÁFICA Y COLUMNA DERECHA */}
           <section className="dash-middle-grid">
@@ -195,7 +233,7 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                     <span className="legend-dot normal"></span>Normal
                   </span>
                   <span>
-                    <span className="legend-dot critico"></span>Crítico (≤ 10)
+                    <span className="legend-dot critico"></span>Crítico (bajo el mínimo)
                   </span>
                 </div>
               </div>
@@ -217,7 +255,12 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                     </div>
                   ) : (
                     stockTipos.map((item, index) => {
-                      const esCritico = item.cantidad <= 10;
+                      // Crítico lo decide el backend (esCritico) con el
+                      // mismo criterio de umbrales que el KPI "Niveles
+                      // críticos": ya no es el "≤ 10" hardcodeado. Si el
+                      // backend aún no devuelve esCritico, se usa la
+                      // regla vieja como fallback.
+                      const esCritico = item.esCritico === undefined ? item.cantidad <= 10 : item.esCritico;
                       const alturaBarra = Math.min(item.cantidad * 3, 100);
                       return (
                         <div key={`${item.tipo}-${index}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1 }}>

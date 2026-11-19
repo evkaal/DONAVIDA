@@ -5,7 +5,7 @@ import ModalRegistrarSalida from './ModalRegistrarSalida';
 import ModalAviso from '../../components/common/ModalAviso';
 import { Sidebar } from '../../components/layout';
 import { getUnidades, registrarSalida } from '../../services/unidadesService';
-import { obtenerHemocomponentes, obtenerTiposSangre } from '../../services/catalogosService';
+import { obtenerHemocomponentes, obtenerTiposSangre, normalizarHemocomponente } from '../../services/catalogosService';
 
 export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -62,7 +62,9 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
         id: u.id,
         folio: u.folio || u.codigo || 'N/D',
         tipo: u.tipo || u.tipoSangre || '',
-        hemocomponente: u.hemocomponente || '',
+        // "Paquete globular" se muestra como "Concentrado eritrocitario":
+        // es el mismo producto (ver catalogosService).
+        hemocomponente: normalizarHemocomponente(u.hemocomponente || ''),
         fechaIngreso: u.fechaExtraccion || u.fechaIngreso || '',
         caducidad: u.fechaCaducidad || u.caducidad || '',
         estado: u.estado || 'Disponible',
@@ -231,20 +233,19 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
                           </span>
                         </td>
                         <td className="cell-actions">
-                          {/* Solo una unidad Disponible puede tener salida. */}
+                          {/* Solo una unidad Disponible puede tener salida:
+                              es la única acción por fila (el botón ••• sin
+                              función se eliminó). */}
                           {String(u.estado || '').toLowerCase() === 'disponible' && (
                             <button
                               type="button"
                               title="Registrar salida (usada o caducada)"
                               onClick={() => { setSalidaUnidad(u); setMotivoSalida('usada'); }}
-                              style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem', marginRight: '6px' }}
+                              style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}
                             >
                               Salida
                             </button>
                           )}
-                          <button type="button" className="btn-row-menu" title="Acciones">
-                            •••
-                          </button>
                         </td>
                       </tr>
                     ))

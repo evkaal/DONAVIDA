@@ -3,6 +3,7 @@ import './SolicitudesEntrantes.css';
 import { Sidebar, Navbar } from '../../components/layout';
 import ModalAviso from '../../components/common/ModalAviso';
 import { obtenerSolicitudesEntrantes, responderSolicitud } from '../../services/solicitudesService';
+import { normalizarHemocomponente } from '../../services/catalogosService';
 
 export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogout }) {
   const [tabActiva, setTabActiva] = useState('pendientes');
@@ -385,7 +386,10 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
                             <span className={`blood-badge blood-${u.tipo.replace('+', 'pos').replace('-', 'neg')}`}>
                               {u.tipo}
                             </span>
-                            <span className="sentr-unit-name">{u.hemocomponente}</span>
+                            {/* "Paquete globular" se muestra como
+                                "Concentrado eritrocitario": es el mismo
+                                producto (ver catalogosService). */}
+                            <span className="sentr-unit-name">{normalizarHemocomponente(u.hemocomponente)}</span>
                             <span className="sentr-unit-qty">× {u.cantidad}</span>
                           </div>
 

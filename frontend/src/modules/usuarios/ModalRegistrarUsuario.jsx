@@ -50,6 +50,12 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
   // Aviso sencillo (modal) en lugar de alert() del navegador.
   const [aviso, setAviso] = useState(null);
 
+  // Nombre de la institución de la sesión (para mostrarla como texto
+  // de solo lectura cuando no eres admin general).
+  const institucionSesionNombre = institucionesList.find(
+    (inst) => String(inst.id) === String(institucionSesionId)
+  )?.nombre;
+
   // Cargar roles e instituciones reales al abrir el modal
   useEffect(() => {
     if (isOpen) {
@@ -215,24 +221,41 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
               </div>
             </div>
 
-            <div className="form-row-modal">
-              <div className="form-group-modal">
-                <label className="form-label-modal">Institución</label>
-                <select
-                  className="select-field-modal"
-                  value={institucionId}
-                  onChange={(e) => setInstitucionId(e.target.value)}
-                  disabled={!esAdminGen && Boolean(institucionSesionId)}
-                  title={!esAdminGen && institucionSesionId ? 'Tu institución (de tu sesión)' : undefined}
-                >
-                  {institucionesList.map((inst) => (
-                    <option key={inst.id} value={inst.id}>
-                      {inst.nombre}
-                    </option>
-                  ))}
-                </select>
+            {/* La institución solo se elige si eres admin general: un
+                admin_institucion no puede crear usuarios para otra
+                institución (el backend también lo fuerza), así que no se
+                le muestra el selector: ve su institución como texto de
+                solo lectura. */}
+            {esAdminGen ? (
+              <div className="form-row-modal">
+                <div className="form-group-modal">
+                  <label className="form-label-modal">Institución</label>
+                  <select
+                    className="select-field-modal"
+                    value={institucionId}
+                    onChange={(e) => setInstitucionId(e.target.value)}
+                  >
+                    {institucionesList.map((inst) => (
+                      <option key={inst.id} value={inst.id}>
+                        {inst.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="form-row-modal">
+                <div className="form-group-modal">
+                  <label className="form-label-modal">Institución</label>
+                  <input
+                    type="text"
+                    className="input-field-modal input-readonly-modal"
+                    value={institucionSesionNombre || 'Sin institución asignada'}
+                    readOnly
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <footer className="mreg-footer">

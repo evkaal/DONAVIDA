@@ -11,12 +11,16 @@ export default function Login({ onLoginSuccess }) {
   // Estados de interfaz
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [cargando, setCargando] = useState(false);
-  const [errorLogin, setErrorLogin] = useState(false);
+  // Mensaje de error del backend (null = sin error). Si es el genérico de
+  // credenciales se muestra el aviso de siempre; si es el de contraseña
+  // débil o cuenta dada de baja, se muestra el mensaje tal cual.
+  const [errorLogin, setErrorLogin] = useState(null);
   const [loginExitoso, setLoginExitoso] = useState(false);
+  const errorGenerico = errorLogin === 'Correo o contraseña incorrectos';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setErrorLogin(false);
+    setErrorLogin(null);
     setLoginExitoso(false);
     setCargando(true);
 
@@ -58,9 +62,11 @@ export default function Login({ onLoginSuccess }) {
         }
       }, 700);
     } catch (err) {
-      // Si el backend rechaza las credenciales (401 Unauthorized u otro error)
+      // Si el backend rechaza las credenciales (401 Unauthorized u otro error).
+      // loginUser lanza el mensaje del backend en texto plano.
       setCargando(false);
-      setErrorLogin(true);
+      const msg = typeof err === 'string' && err ? err : 'Correo o contraseña incorrectos';
+      setErrorLogin(msg);
       setLoginExitoso(false);
       console.error("Error en el login:", err);
     }
@@ -128,7 +134,8 @@ export default function Login({ onLoginSuccess }) {
             </div>
           )}
 
-          {/* Alerta de credenciales incorrectas */}
+          {/* Alerta de credenciales incorrectas (o del motivo que el
+              backend devolvió: contraseña débil o cuenta dada de baja) */}
           {errorLogin && (
             <div className="custom-alert-error" role="alert">
               <div className="alert-error-icon">
@@ -139,10 +146,10 @@ export default function Login({ onLoginSuccess }) {
               </div>
               <div>
                 <p className="alert-error-title">
-                  Correo o contraseña incorrectos
+                  {errorGenerico ? 'Correo o contraseña incorrectos' : 'No se pudo iniciar sesión'}
                 </p>
                 <p className="alert-error-desc">
-                  Verifica tus datos e inténtalo de nuevo.
+                  {errorGenerico ? 'Verifica tus datos e inténtalo de nuevo.' : errorLogin}
                 </p>
               </div>
             </div>

@@ -98,8 +98,9 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Contraseña segura: mínimo 8 caracteres, mayúscula, minúscula y
-	// número. Solo se exige al registrar, no al iniciar sesión (los
-	// usuarios existentes con contraseña débil siguen entrando).
+	// número. Se exige al registrar y también al entrar: un usuario
+	// existente con contraseña débil no puede iniciar sesión hasta que
+	// un administrador le asigne una contraseña nueva (ver Login).
 	if !contrasenaSegura(input.Password) {
 		http.Error(w, "La contraseña debe tener al menos 8 caracteres e incluir mayúsculas, minúsculas y números.", http.StatusBadRequest)
 		return
@@ -174,14 +175,15 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	var storedHash string
 	var nombreUsuario string
 	var rolID int
+	var activo bool
 	var institucionID sql.NullInt64
 	var institucionNombre sql.NullString
 
-	query := `SELECT u.nombre, u.password_hash, u.rol_id, u.institucion_id, i.nombre
+	query := `SELECT u.nombre, u.password_hash, u.rol_id, u.estado, u.institucion_id, i.nombre
 		FROM usuarios u
 		LEFT JOIN instituciones i ON u.institucion_id = i.id
 		WHERE u.email = $1`
-	err = database.DB.QueryRow(query, input.Email).Scan(&nombreUsuario, &storedHash, &rolID, &institucionID, &institucionNombre)
+	err = database.DB.QueryRow(query, input.Email).Scan(&nombreUsuario, &storedHash, &rolID, &activo, &institucionID, &institucionNombre)
 
 	if err != nil {
 		log.Printf("Error buscando usuario por email (%s): %v", input.Email, err)
@@ -194,6 +196,23 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("Contraseña incorrecta para el usuario: %s", input.Email)
 		http.Error(w, "Correo o contraseña incorrectos", http.StatusUnauthorized)
+		return
+	}
+
+	// 2b. Cuenta dada de baja: aunque la contraseña sea correcta, no entra.
+	if !activo {
+		log.Printf("Login rechazado: usuario dado de baja (%s)", input.Email)
+		http.Error(w, "Tu cuenta fue dada de baja. Contacta a un administrador para reactivarla.", http.StatusUnauthorized)
+		return
+	}
+
+	// 2c. Política de contraseña también al entrar: la contraseña debe
+	// cumplir la misma regla que al registrar (mínimo 8 caracteres con
+	// mayúscula, minúscula y número). Un usuario existente con contraseña
+	// débil no entra hasta que un administrador le asigne una nueva.
+	if !contrasenaSegura(input.Password) {
+		log.Printf("Login rechazado: contraseña débil (%s)", input.Email)
+		http.Error(w, "Tu contraseña no cumple con la política de seguridad (mínimo 8 caracteres con mayúscula, minúscula y número). Pide a un administrador que te asigne una contraseña nueva.", http.StatusUnauthorized)
 		return
 	}
 
@@ -284,19 +303,33 @@ func GetDashboardStats(w http.ResponseWriter, r *http.Request) {
 		SolPendientes = 0
 	}
 
-	// 5. Niveles críticos
+	// 5. Niveles críticos — MISMO criterio que la gráfica de
+	// GetStockPorTipo: se cuentan las COMBINACIONES (tipo sanguíneo ×
+	// hemocomponente) cuyo disponible es <= su mínimo de umbrales_stock
+	// (5 por defecto, igual que GetStock, si no hay fila de umbral para
+	// esa combinación). Antes solo se contaban las filas que existían en
+	// umbrales_stock, así que con esa tabla vacía el KPI era 0 aunque la
+	// gráfica marcara barras en rojo por el defecto 5.
 	err = database.DB.QueryRow(`
-		SELECT COUNT(u.id) 
-		FROM umbrales_stock u
-		WHERE ($1 = 0 OR u.institucion_id = $1) AND (
-			SELECT COUNT(h.id) 
-			FROM hemocomponentes h
-			JOIN estados_hemocomponente eh ON h.estado_id = eh.id
-			WHERE h.institucion_id = u.institucion_id 
-			  AND h.tipo_sangre_id = u.tipo_sangre_id 
-			  AND h.tipo_hemocomponente_id = u.tipo_hemocomponente_id
-			  AND eh.nombre ILIKE 'disponible'
-		) <= u.stock_minimo
+		SELECT COUNT(*) FROM (
+			SELECT ts.id AS ts_id, th.id AS th_id,
+			       COUNT(h.id) AS cantidad,
+			       COALESCE(MIN(u.stock_minimo), 5) AS minimo
+			FROM tipos_sangre ts
+			CROSS JOIN tipos_hemocomponente th
+			LEFT JOIN hemocomponentes h
+			       ON h.tipo_sangre_id = ts.id
+			      AND h.tipo_hemocomponente_id = th.id
+			      AND ($1 = 0 OR h.institucion_id = $1)
+			      AND EXISTS (SELECT 1 FROM estados_hemocomponente eh
+			                   WHERE eh.id = h.estado_id
+			                     AND eh.nombre ILIKE 'disponible')
+			LEFT JOIN umbrales_stock u
+			       ON u.tipo_sangre_id = ts.id
+			      AND u.tipo_hemocomponente_id = th.id
+			      AND ($1 = 0 OR u.institucion_id = $1)
+			GROUP BY ts.id, th.id
+		) c WHERE c.cantidad <= c.minimo
 	`, instID).Scan(&nivCriticos)
 	if err != nil {
 		log.Printf("Aviso: umbrales_stock no configurado: %v", err)
@@ -328,18 +361,34 @@ func GetStockPorTipo(w http.ResponseWriter, r *http.Request) {
 
 	instID := institucionParaConsulta(r)
 
+	// Crítico con el MISMO criterio que el KPI "Niveles críticos" de
+	// GetDashboardStats: por cada combinación (tipo sanguíneo ×
+	// hemocomponente) se compara el disponible con su mínimo de
+	// umbrales_stock (5 por defecto, igual que GetStock, si no hay fila
+	// de umbral para esa combinación). Un tipo es crítico si ALGUNA de
+	// sus combinaciones está por debajo de su mínimo. Así, una barra
+	// roja en la gráfica implica al menos una combinación contada en el
+	// KPI (cuando esa combinación tiene su umbral configurado).
 	rows, err := database.DB.Query(`
         SELECT ts.grupo_abo || ts.factor_rh AS tipo,
-               COUNT(h.id) AS cantidad
+               th.id AS hemo_id,
+               COUNT(h.id) AS cantidad,
+               COALESCE(MIN(u.stock_minimo), 5) AS minimo
         FROM tipos_sangre ts
+        CROSS JOIN tipos_hemocomponente th
         LEFT JOIN hemocomponentes h
-               ON ts.id = h.tipo_sangre_id
+               ON h.tipo_sangre_id = ts.id
+              AND h.tipo_hemocomponente_id = th.id
               AND ($1 = 0 OR h.institucion_id = $1)
               AND EXISTS (SELECT 1 FROM estados_hemocomponente eh
                            WHERE eh.id = h.estado_id
                              AND eh.nombre ILIKE 'disponible')
-        GROUP BY ts.grupo_abo, ts.factor_rh
-        ORDER BY tipo;
+        LEFT JOIN umbrales_stock u
+               ON u.tipo_sangre_id = ts.id
+              AND u.tipo_hemocomponente_id = th.id
+              AND ($1 = 0 OR u.institucion_id = $1)
+        GROUP BY ts.grupo_abo, ts.factor_rh, th.id
+        ORDER BY tipo, th.id;
     `, instID)
 	if err != nil {
 		http.Error(w, "Error al consultar stock por tipo", http.StatusInternalServerError)
@@ -355,13 +404,26 @@ func GetStockPorTipo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var stockList []StockTipo
+	// Agregado por tipo: la cantidad es la suma de sus combinaciones y
+	// es crítico si alguna combinación está por debajo de su mínimo.
+	indicePorTipo := map[string]int{}
 	for rows.Next() {
-		var s StockTipo
-		if err := rows.Scan(&s.Tipo, &s.Cantidad); err != nil {
+		var tipo string
+		var hemoID, cantidad, minimo int
+		if err := rows.Scan(&tipo, &hemoID, &cantidad, &minimo); err != nil {
 			continue
 		}
-		s.EsCritico = s.Cantidad <= 10
-		stockList = append(stockList, s)
+		idx, ok := indicePorTipo[tipo]
+		if !ok {
+			stockList = append(stockList, StockTipo{Tipo: tipo})
+			idx = len(stockList) - 1
+			indicePorTipo[tipo] = idx
+		}
+		stockList[idx].Cantidad += cantidad
+		// Mismo comparador que el KPI (disponible <= mínimo).
+		if cantidad <= minimo {
+			stockList[idx].EsCritico = true
+		}
 	}
 
 	// Verificamos si hubo algún error al finalizar el recorrido de las filas (soluciona la advertencia)
@@ -1001,4 +1063,84 @@ func EliminarUsuario(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"mensaje": "Usuario eliminado permanentemente"})
+}
+
+// 3. Dar de baja o reactivar un usuario (admin general: cualquiera;
+// admin institucional: solo los que él creó; personal médico: prohibido).
+// PATCH /api/usuarios/{id}/estado  { "estado": true|false }
+// El usuario dado de baja sigue en la lista (para poder reactivarlo) y
+// el Login lo rechaza (ver Login): no puede entrar hasta reactivarlo.
+func CambiarEstadoUsuario(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	sesion, ok := sesionDesdeToken(r)
+	if !ok {
+		http.Error(w, "Token de autorización requerido", http.StatusUnauthorized)
+		return
+	}
+	if sesion.RolID == 3 {
+		http.Error(w, "Acceso denegado", http.StatusForbidden)
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/usuarios/")
+	userID := strings.Trim(strings.TrimSuffix(path, "/estado"), "/")
+	if userID == "" || strings.Contains(userID, "/") {
+		http.Error(w, "ID de usuario inválido", http.StatusBadRequest)
+		return
+	}
+
+	var input struct {
+		Estado *bool `json:"estado"`
+		Activo *bool `json:"activo"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "Error al leer los datos", http.StatusBadRequest)
+		return
+	}
+	nuevoEstado := input.Estado
+	if nuevoEstado == nil {
+		nuevoEstado = input.Activo
+	}
+	if nuevoEstado == nil {
+		http.Error(w, "Se requiere el campo estado (true para reactivar, false para dar de baja)", http.StatusBadRequest)
+		return
+	}
+
+	// Un admin institucional solo puede cambiar el estado de los usuarios
+	// que él creó (misma regla que EliminarUsuario).
+	var query string
+	var args []interface{}
+	if sesion.RolID == 2 {
+		query = `UPDATE usuarios SET estado = $1 WHERE id = $2 AND creado_por = $3`
+		args = []interface{}{*nuevoEstado, userID, sesion.ID}
+	} else {
+		query = `UPDATE usuarios SET estado = $1 WHERE id = $2`
+		args = []interface{}{*nuevoEstado, userID}
+	}
+	result, err := database.DB.Exec(query, args...)
+	if err != nil {
+		log.Printf("Error al cambiar estado del usuario %s: %v", userID, err)
+		http.Error(w, "Error al actualizar el estado del usuario", http.StatusInternalServerError)
+		return
+	}
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		http.Error(w, "Usuario no encontrado", http.StatusNotFound)
+		return
+	}
+
+	mensaje := "Usuario dado de baja"
+	if *nuevoEstado {
+		mensaje = "Usuario reactivado"
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"mensaje": mensaje,
+		"estado":  *nuevoEstado,
+	})
 }

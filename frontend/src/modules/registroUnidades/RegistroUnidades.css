@@ -275,21 +275,6 @@
   background-color: #2563eb;
 }
 
-.btn-row-menu {
-  background: none;
-  border: none;
-  color: #94a3b8;
-  cursor: pointer;
-  padding: 0.25rem 0.5rem;
-  font-size: 1rem;
-  border-radius: 4px;
-}
-
-.btn-row-menu:hover {
-  color: #1e293b;
-  background-color: #e2e8f0;
-}
-
 /* Estado Vacío de la Tabla */
 .reg-table-empty-cell {
   padding: 3rem 1rem !important;
