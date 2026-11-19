@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './SolicitudUnidades.css';
 import { Sidebar, Navbar } from '../../components/layout';
 import ModalPrevisualizacion from './ModalPrevisualizacion';
+import ModalAviso from '../../components/common/ModalAviso';
 import { crearSolicitud } from '../../services/solicitudesService';
 import { obtenerHemocomponentes, obtenerTiposSangre } from '../../services/catalogosService';
 
@@ -21,6 +22,9 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  // Aviso y confirmación sencillos (modal) en lugar de alert()/confirm().
+  const [aviso, setAviso] = useState(null);
+  const [confirmacion, setConfirmacion] = useState(null); // { mensaje, onAceptar }
 
   // Catálogos reales de la BD (nombres que el backend sí puede resolver).
   // Sin lista hardcodeada: si el catálogo falla o viene vacío, se muestra
@@ -101,11 +105,14 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
 
   const handleCancelar = () => {
     if (unidades.length > 0 || motivo.trim() !== '') {
-      if (window.confirm('¿Deseas descartar los datos de esta solicitud?')) {
-        setUnidades([]);
-        setMotivo('');
-        setPrioridad('critica');
-      }
+      setConfirmacion({
+        mensaje: '¿Deseas descartar los datos de esta solicitud?',
+        onAceptar: () => {
+          setUnidades([]);
+          setMotivo('');
+          setPrioridad('critica');
+        },
+      });
     } else {
       setPrioridad('critica');
     }
@@ -113,7 +120,7 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
 
   const handlePrevisualizar = () => {
     if (unidades.length === 0) {
-      alert('Por favor agrega al menos una unidad a la solicitud antes de previsualizar.');
+      setAviso({ titulo: 'Sin unidades', mensaje: 'Por favor agrega al menos una unidad a la solicitud antes de previsualizar.' });
       return;
     }
     setIsModalOpen(true);
@@ -123,7 +130,7 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
     if (enviando || unidades.length === 0) return;
     const institucionId = usuarioSesion?.institucion_id;
     if (!institucionId) {
-      alert('Tu usuario no tiene institución asignada. Pide al administrador general que te asigne una institución.');
+      setAviso({ titulo: 'Sin institución', mensaje: 'Tu usuario no tiene institución asignada. Pide al administrador general que te asigne una institución.' });
       return;
     }
     setEnviando(true);
@@ -146,7 +153,7 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
         onCambiarModulo('historico');
       }
     } catch (err) {
-      alert(err?.response?.data || err?.message || 'No se pudo enviar la solicitud.');
+      setAviso({ titulo: 'Error', mensaje: String(err?.response?.data || err?.message || 'No se pudo enviar la solicitud.') });
     } finally {
       setEnviando(false);
     }
@@ -536,6 +543,27 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
         onEliminarUnidad={handleEliminarUnidad}
         onConfirmarEnvio={handleConfirmarEnvio}
         enviando={enviando}
+      />
+
+      {/* Aviso y confirmación sencillos (modal) en lugar de alert()/confirm() */}
+      <ModalAviso
+        isOpen={!!aviso}
+        titulo={aviso?.titulo || 'Aviso'}
+        mensaje={aviso?.mensaje}
+        onClose={() => setAviso(null)}
+      />
+      <ModalAviso
+        isOpen={!!confirmacion}
+        tipo="confirmacion"
+        titulo="Descartar solicitud"
+        mensaje={confirmacion?.mensaje}
+        textoAceptar="Descartar"
+        onAceptar={() => {
+          const accion = confirmacion?.onAceptar;
+          setConfirmacion(null);
+          if (accion) accion();
+        }}
+        onClose={() => setConfirmacion(null)}
       />
     </div>
   );

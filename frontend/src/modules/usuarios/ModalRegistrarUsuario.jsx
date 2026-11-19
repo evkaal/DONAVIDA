@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './ModalRegistrarUsuario.css';
+import ModalAviso from '../../components/common/ModalAviso';
 import { registrarUsuario, obtenerInstituciones, obtenerRoles } from '../../services/usuariosService';
 
 // Fallback si /catalogos/roles falla o la BD aún no tiene roles sembrados.
@@ -9,6 +10,13 @@ const ROLES_FALLBACK = [
   { id: 2, nombre: 'Admin institucional' },
   { id: 3, nombre: 'Personal médico' },
 ];
+
+// Contraseña segura: mínimo 8 caracteres, al menos una mayúscula,
+// una minúscula y un dígito (misma regla que el backend).
+const contrasenaSegura = (p) => {
+  if (!p || p.length < 8) return false;
+  return /[A-Z]/.test(p) && /[a-z]/.test(p) && /[0-9]/.test(p);
+};
 
 export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, usuarioActual }) {
   // Sesión del usuario que registra (prop o localStorage): de ahí sale su
@@ -37,6 +45,16 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
 
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [mostrarConfirm, setMostrarConfirm] = useState(false);
+  // Error de validación visible EN EL FORMULARIO (inline, no alert).
+  const [errorForm, setErrorForm] = useState('');
+  // Aviso sencillo (modal) en lugar de alert() del navegador.
+  const [aviso, setAviso] = useState(null);
+
+  // Nombre de la institución de la sesión (para mostrarla como texto
+  // de solo lectura cuando no eres admin general).
+  const institucionSesionNombre = institucionesList.find(
+    (inst) => String(inst.id) === String(institucionSesionId)
+  )?.nombre;
 
   // Cargar roles e instituciones reales al abrir el modal
   useEffect(() => {
@@ -65,9 +83,21 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
 
   const handleSubmit = async (e, guardarOtro = false) => {
     e.preventDefault();
+    setErrorForm('');
+
+    // Nombre de usuario sin números (acentos, espacios y guiones sí).
+    if (/\d/.test(nombre.trim())) {
+      setErrorForm('El nombre de usuario no puede contener números.');
+      return;
+    }
 
     if (password !== confirmPassword) {
-      alert('Las contraseñas no coinciden. Por favor verifica.');
+      setErrorForm('Las contraseñas no coinciden. Por favor verifica.');
+      return;
+    }
+
+    if (!contrasenaSegura(password)) {
+      setErrorForm('La contraseña debe tener al menos 8 caracteres e incluir mayúsculas, minúsculas y números.');
       return;
     }
 
@@ -97,13 +127,16 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
       }
     } catch (err) {
       console.error("Error al registrar usuario:", err);
-      alert("Hubo un error al registrar el usuario en la base de datos.");
+      // El backend devuelve su motivo (p. ej. la regla de contraseña o
+      // de nombre) si el registro llegó hasta allá; si no, el genérico.
+      setAviso({ titulo: 'Error', mensaje: String(err?.response?.data || 'Hubo un error al registrar el usuario en la base de datos.') });
     } finally {
       setCargando(false);
     }
   };
 
   return (
+    <>
     <div className="mreg-overlay" onClick={onClose} role="dialog" aria-modal="true">
       <div className="mreg-card" onClick={(e) => e.stopPropagation()}>
         <header className="mreg-header">
@@ -116,6 +149,12 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
 
         <form onSubmit={(e) => handleSubmit(e, false)}>
           <div className="mreg-body">
+            {/* Error de validación inline (nombre, contraseña, coincidencia) */}
+            {errorForm && (
+              <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', borderRadius: '8px', padding: '10px 14px', marginBottom: '12px', fontSize: '0.9rem' }}>
+                {errorForm}
+              </div>
+            )}
             <div className="form-group-modal">
               <label className="form-label-modal">Nombre completo</label>
               <input
@@ -182,24 +221,41 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
               </div>
             </div>
 
-            <div className="form-row-modal">
-              <div className="form-group-modal">
-                <label className="form-label-modal">Institución</label>
-                <select
-                  className="select-field-modal"
-                  value={institucionId}
-                  onChange={(e) => setInstitucionId(e.target.value)}
-                  disabled={!esAdminGen && Boolean(institucionSesionId)}
-                  title={!esAdminGen && institucionSesionId ? 'Tu institución (de tu sesión)' : undefined}
-                >
-                  {institucionesList.map((inst) => (
-                    <option key={inst.id} value={inst.id}>
-                      {inst.nombre}
-                    </option>
-                  ))}
-                </select>
+            {/* La institución solo se elige si eres admin general: un
+                admin_institucion no puede crear usuarios para otra
+                institución (el backend también lo fuerza), así que no se
+                le muestra el selector: ve su institución como texto de
+                solo lectura. */}
+            {esAdminGen ? (
+              <div className="form-row-modal">
+                <div className="form-group-modal">
+                  <label className="form-label-modal">Institución</label>
+                  <select
+                    className="select-field-modal"
+                    value={institucionId}
+                    onChange={(e) => setInstitucionId(e.target.value)}
+                  >
+                    {institucionesList.map((inst) => (
+                      <option key={inst.id} value={inst.id}>
+                        {inst.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="form-row-modal">
+                <div className="form-group-modal">
+                  <label className="form-label-modal">Institución</label>
+                  <input
+                    type="text"
+                    className="input-field-modal input-readonly-modal"
+                    value={institucionSesionNombre || 'Sin institución asignada'}
+                    readOnly
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <footer className="mreg-footer">
@@ -211,5 +267,14 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
         </form>
       </div>
     </div>
+
+      {/* Aviso sencillo (modal) en lugar de alert() */}
+      <ModalAviso
+        isOpen={!!aviso}
+        titulo={aviso?.titulo || 'Aviso'}
+        mensaje={aviso?.mensaje}
+        onClose={() => setAviso(null)}
+      />
+    </>
   );
 }

@@ -197,10 +197,10 @@ func resolveHemocomponenteID(nombre string) (int, error) {
 // Devuelve el id menor entre los que casen (las filas se leen ordenadas
 // por id). Si nada casa, devuelve sql.ErrNoRows para que el llamador
 // siga devolviendo su 400 con mensaje claro.
-// Solo se aceptan las dos tablas de catálogo que usan los llamadores;
+// Solo se aceptan las tablas de catálogo que usan los llamadores;
 // el nombre de tabla nunca viene del usuario (solo literales).
 func resolvePorPatron(tabla, patron string) (int, error) {
-	if tabla != "niveles_prioridad" && tabla != "estados_solicitud" {
+	if tabla != "niveles_prioridad" && tabla != "estados_solicitud" && tabla != "estados_hemocomponente" {
 		return 0, fmt.Errorf("tabla de catálogo no permitida: %s", tabla)
 	}
 	buscado := normalizarNombre(strings.ReplaceAll(patron, "%", ""))
@@ -253,6 +253,7 @@ func resolvePorPatron(tabla, patron string) (int, error) {
 // ---------------------------------------------------------------------------
 
 type UnidadResponse struct {
+	ID              int    `json:"id"`
 	Folio           string `json:"folio"`
 	Tipo            string `json:"tipo"`
 	Hemocomponente  string `json:"hemocomponente"`
@@ -276,7 +277,8 @@ func GetUnidades(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := database.DB.Query(`
-		SELECT h.codigo_unidad,
+		SELECT h.id,
+		       h.codigo_unidad,
 		       ts.grupo_abo || ts.factor_rh AS tipo,
 		       th.componente AS hemocomponente,
 		       TO_CHAR(h.fecha_extraccion, 'YYYY-MM-DD') AS fecha_extraccion,
@@ -301,7 +303,7 @@ func GetUnidades(w http.ResponseWriter, r *http.Request) {
 	unidades := []UnidadResponse{}
 	for rows.Next() {
 		var u UnidadResponse
-		if err := rows.Scan(&u.Folio, &u.Tipo, &u.Hemocomponente, &u.FechaExtraccion, &u.FechaCaducidad, &u.Estado, &u.Institucion); err != nil {
+		if err := rows.Scan(&u.ID, &u.Folio, &u.Tipo, &u.Hemocomponente, &u.FechaExtraccion, &u.FechaCaducidad, &u.Estado, &u.Institucion); err != nil {
 			continue
 		}
 		unidades = append(unidades, u)

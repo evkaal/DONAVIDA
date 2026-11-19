@@ -42,7 +42,7 @@ func enableCORS(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 		}
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 		// Si es una petición preflight del navegador (OPTIONS), responde inmediatamente
@@ -78,9 +78,13 @@ func main() {
 	})
 
 	// Ruta para eliminar usuarios por ID (DELETE /api/usuarios/{id})
+	// y para darlos de baja o reactivarlos
+	// (PATCH /api/usuarios/{id}/estado  { "estado": true|false })
 	mux.HandleFunc("/api/usuarios/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
 			handlers.EliminarUsuario(w, r)
+		} else if r.Method == http.MethodPatch && strings.HasSuffix(r.URL.Path, "/estado") {
+			handlers.CambiarEstadoUsuario(w, r)
 		} else {
 			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
 		}
@@ -103,6 +107,15 @@ func main() {
 		default:
 			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
 		}
+	})
+
+	// Salida de unidad: POST /api/unidades/{id}/salida
+	mux.HandleFunc("/api/unidades/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/salida") {
+			handlers.RegistrarSalida(w, r)
+			return
+		}
+		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
 	})
 
 	// Solicitudes: POST crea, GET /historico lista el histórico

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import "./GestionUsuarios.css";
 import { Sidebar, Navbar } from "../../components/layout";
 import ModalRegistrarUsuario from "./ModalRegistrarUsuario";
-import { obtenerInstituciones, obtenerUsuarios, eliminarUsuarioService, obtenerRoles } from "../../services/usuariosService";
+import ModalAviso from "../../components/common/ModalAviso";
+import { obtenerInstituciones, obtenerUsuarios, eliminarUsuarioService, cambiarEstadoUsuario, obtenerRoles } from "../../services/usuariosService";
 import ModalRegistrarInstitucion from "../insti/ModalRegistrarInsti";
 
 export default function GestionUsuarios({
@@ -21,6 +22,9 @@ export default function GestionUsuarios({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModalInstOpen, setIsModalInstOpen] = useState(false);
   const [usuariosList, setUsuariosList] = useState([]);
+  // Aviso y confirmación sencillos (modal) en lugar de alert()/confirm().
+  const [aviso, setAviso] = useState(null);
+  const [confirmacion, setConfirmacion] = useState(null); // { mensaje, onAceptar }
 
   // Función para cargar usuarios
   const cargarUsuarios = async () => {
@@ -56,17 +60,54 @@ export default function GestionUsuarios({
     cargarUsuarios();
   }, []);
 
-  const handleEliminar = async (id) => {
-    if (window.confirm("¿Estás seguro de eliminar este usuario del sistema?")) {
-      try {
-        await eliminarUsuarioService(id);
-        alert("Usuario eliminado con éxito");
-        cargarUsuarios(); // Recargar la tabla
-      } catch (err) {
-        console.error("Error al eliminar:", err);
-        alert("No se pudo eliminar el usuario.");
-      }
+  const eliminarUsuarioConfirmado = async (id) => {
+    try {
+      await eliminarUsuarioService(id);
+      setAviso({ titulo: 'Usuario eliminado', mensaje: 'Usuario eliminado con éxito' });
+      cargarUsuarios(); // Recargar la tabla
+    } catch (err) {
+      console.error("Error al eliminar:", err);
+      setAviso({ titulo: 'Error', mensaje: 'No se pudo eliminar el usuario.' });
     }
+  };
+
+  const handleEliminar = (id) => {
+    setConfirmacion({
+      titulo: 'Eliminar usuario',
+      mensaje: '¿Estás seguro de eliminar este usuario del sistema?',
+      textoAceptar: 'Eliminar',
+      onAceptar: () => eliminarUsuarioConfirmado(id),
+    });
+  };
+
+  // Dar de baja: el usuario sigue en la lista (para poder reactivarlo)
+  // pero el Login lo rechaza hasta que se reactive.
+  const cambiarEstadoConfirmado = async (id, estado) => {
+    try {
+      await cambiarEstadoUsuario(id, estado);
+      setAviso({
+        titulo: estado ? 'Usuario reactivado' : 'Usuario dado de baja',
+        mensaje: estado
+          ? 'El usuario puede volver a iniciar sesión.'
+          : 'El usuario ya no puede iniciar sesión hasta que se reactive.',
+      });
+      cargarUsuarios(); // Recargar la tabla
+    } catch (err) {
+      console.error("Error al cambiar estado:", err);
+      setAviso({ titulo: 'Error', mensaje: 'No se pudo actualizar el estado del usuario.' });
+    }
+  };
+
+  const handleCambiarEstado = (u) => {
+    const darDeBaja = Boolean(u.activo);
+    setConfirmacion({
+      titulo: darDeBaja ? 'Dar de baja usuario' : 'Reactivar usuario',
+      mensaje: darDeBaja
+        ? `¿Dar de baja a ${u.nombre}? Ya no podrá iniciar sesión hasta que se reactive.`
+        : `¿Reactivar a ${u.nombre}? Volverá a poder iniciar sesión.`,
+      textoAceptar: darDeBaja ? 'Dar de baja' : 'Reactivar',
+      onAceptar: () => cambiarEstadoConfirmado(u.id, !darDeBaja),
+    });
   };
 
   // --- CÁLCULO DINÁMICO PARA LAS TARJETAS KPI ---
@@ -225,7 +266,7 @@ export default function GestionUsuarios({
 
             <div className="usuarios-kpi-card">
               <div className="usuarios-kpi-info">
-                <span className="usuarios-kpi-title">Cuentas inactivas</span>
+                <span className="usuarios-kpi-title">Cuentas dadas de baja</span>
                 <h2 className="usuarios-kpi-number">{cuentasInactivas}</h2>
               </div>
               <div className="usuarios-kpi-icon-badge badge-users-gray">
@@ -290,7 +331,7 @@ export default function GestionUsuarios({
                 >
                   <option value="todos">Estado: Todos</option>
                   <option value="Activo">Activo</option>
-                  <option value="Inactivo">Inactivo</option>
+                  <option value="Inactivo">Dado de baja</option>
                 </select>
               </div>
             </div>
@@ -324,11 +365,28 @@ export default function GestionUsuarios({
                     <span>{u.institucion}</span>
                     <span>
                       <span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '0.8rem', backgroundColor: u.activo ? '#dcfce7' : '#f1f5f9', color: u.activo ? '#166534' : '#64748b' }}>
-                        {u.activo ? 'Activo' : 'Inactivo'}
+                        {u.activo ? 'Activo' : 'Dado de baja'}
                       </span>
                     </span>
                     <span>{u.created_at ? u.created_at.substring(0, 10) : 'N/A'}</span>
-                    <span>
+                    <span style={{ display: 'flex', gap: '6px' }}>
+                      {u.activo ? (
+                        <button
+                          type="button"
+                          onClick={() => handleCambiarEstado(u)}
+                          style={{ background: '#fef3c7', color: '#92400e', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+                        >
+                          Dar de baja
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleCambiarEstado(u)}
+                          style={{ background: '#dcfce7', color: '#166534', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+                        >
+                          Reactivar
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleEliminar(u.id)}
@@ -374,6 +432,27 @@ export default function GestionUsuarios({
           cargarUsuarios();
           setIsModalInstOpen(false);
         }}
+      />
+
+      {/* Aviso y confirmación sencillos (modal) en lugar de alert()/confirm() */}
+      <ModalAviso
+        isOpen={!!aviso}
+        titulo={aviso?.titulo || 'Aviso'}
+        mensaje={aviso?.mensaje}
+        onClose={() => setAviso(null)}
+      />
+      <ModalAviso
+        isOpen={!!confirmacion}
+        tipo="confirmacion"
+        titulo={confirmacion?.titulo || 'Confirmar'}
+        mensaje={confirmacion?.mensaje}
+        textoAceptar={confirmacion?.textoAceptar || 'Aceptar'}
+        onAceptar={() => {
+          const accion = confirmacion?.onAceptar;
+          setConfirmacion(null);
+          if (accion) accion();
+        }}
+        onClose={() => setConfirmacion(null)}
       />
     </div>
   );

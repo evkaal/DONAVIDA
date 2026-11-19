@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import './SolicitudesEntrantes.css';
 import { Sidebar, Navbar } from '../../components/layout';
+import ModalAviso from '../../components/common/ModalAviso';
 import { obtenerSolicitudesEntrantes, responderSolicitud } from '../../services/solicitudesService';
+import { normalizarHemocomponente } from '../../services/catalogosService';
 
 export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogout }) {
   const [tabActiva, setTabActiva] = useState('pendientes');
@@ -11,6 +13,9 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
 
   const [solicitudes, setSolicitudes] = useState([]);
   const [errorCarga, setErrorCarga] = useState('');
+  // Aviso y confirmación sencillos (modal) en lugar de alert()/confirm().
+  const [aviso, setAviso] = useState(null);
+  const [confirmacion, setConfirmacion] = useState(null); // { mensaje, onAceptar }
 
   const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
   // La institución es solo la de la sesión. Sin fallback: un usuario sin
@@ -97,19 +102,24 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
       await responderSolicitud(id, 'aceptar');
       actualizarEstadoLocal(id, 'aceptada');
     } catch (err) {
-      alert(err?.response?.data || err?.message || 'No se pudo aceptar la solicitud.');
+      setAviso({ titulo: 'Error', mensaje: String(err?.response?.data || err?.message || 'No se pudo aceptar la solicitud.') });
     }
   };
 
-  const handleRechazar = async (id) => {
-    const confirmacion = window.confirm(`¿Estás seguro de rechazar la solicitud ${id}?`);
-    if (!confirmacion) return;
+  const rechazarSolicitud = async (id) => {
     try {
       await responderSolicitud(id, 'rechazar');
       actualizarEstadoLocal(id, 'rechazada');
     } catch (err) {
-      alert(err?.response?.data || err?.message || 'No se pudo rechazar la solicitud.');
+      setAviso({ titulo: 'Error', mensaje: String(err?.response?.data || err?.message || 'No se pudo rechazar la solicitud.') });
     }
+  };
+
+  const handleRechazar = (id) => {
+    setConfirmacion({
+      mensaje: `¿Estás seguro de rechazar la solicitud ${id}?`,
+      onAceptar: () => rechazarSolicitud(id),
+    });
   };
 
   // Helpers
@@ -376,7 +386,10 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
                             <span className={`blood-badge blood-${u.tipo.replace('+', 'pos').replace('-', 'neg')}`}>
                               {u.tipo}
                             </span>
-                            <span className="sentr-unit-name">{u.hemocomponente}</span>
+                            {/* "Paquete globular" se muestra como
+                                "Concentrado eritrocitario": es el mismo
+                                producto (ver catalogosService). */}
+                            <span className="sentr-unit-name">{normalizarHemocomponente(u.hemocomponente)}</span>
                             <span className="sentr-unit-qty">× {u.cantidad}</span>
                           </div>
 
@@ -456,6 +469,27 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
           </div>
         </main>
       </div>
+
+      {/* Aviso y confirmación sencillos (modal) en lugar de alert()/confirm() */}
+      <ModalAviso
+        isOpen={!!aviso}
+        titulo={aviso?.titulo || 'Aviso'}
+        mensaje={aviso?.mensaje}
+        onClose={() => setAviso(null)}
+      />
+      <ModalAviso
+        isOpen={!!confirmacion}
+        tipo="confirmacion"
+        titulo="Rechazar solicitud"
+        mensaje={confirmacion?.mensaje}
+        textoAceptar="Rechazar"
+        onAceptar={() => {
+          const accion = confirmacion?.onAceptar;
+          setConfirmacion(null);
+          if (accion) accion();
+        }}
+        onClose={() => setConfirmacion(null)}
+      />
     </div>
   );
 }
