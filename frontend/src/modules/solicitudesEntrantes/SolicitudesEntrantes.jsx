@@ -79,12 +79,12 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
   });
 
   // Manejadores
-  const actualizarEstadoLocal = (id, estado) => {
+  const actualizarEstadoLocal = (id, estado, extra = {}) => {
     setSolicitudes((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, estado } : s))
+      prev.map((s) => (s.id === id ? { ...s, estado, ...extra } : s))
     );
     setConteos((prev) => {
-      const lista = solicitudes.map((s) => (s.id === id ? { ...s, estado } : s));
+      const lista = solicitudes.map((s) => (s.id === id ? { ...s, estado, ...extra } : s));
       return {
         pendientes: lista.filter((x) => x.estado === 'pendiente').length,
         aceptadas: lista.filter((x) => x.estado === 'aceptada').length,
@@ -93,14 +93,18 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
       };
     });
     if (solicitudSeleccionada?.id === id) {
-      setSolicitudSeleccionada((prev) => (prev ? { ...prev, estado } : null));
+      setSolicitudSeleccionada((prev) => (prev ? { ...prev, estado, ...extra } : null));
     }
   };
 
   const handleAceptar = async (id) => {
     try {
-      await responderSolicitud(id, 'aceptar');
-      actualizarEstadoLocal(id, 'aceptada');
+      const res = await responderSolicitud(id, 'aceptar');
+      // La institución que atendió es la de la sesión (el backend también
+      // la devuelve en atendidaPor).
+      actualizarEstadoLocal(id, 'aceptada', {
+        atendidaPor: res?.atendidaPor || usuarioSesion?.institucion || '',
+      });
     } catch (err) {
       setAviso({ titulo: 'Error', mensaje: String(err?.response?.data || err?.message || 'No se pudo aceptar la solicitud.') });
     }
@@ -299,7 +303,20 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
                           <td>{renderPrioridadBadge(item.prioridad)}</td>
                           <td className="cell-sentr-units">{item.totalUnidades}</td>
                           <td className="cell-sentr-date">{item.fechaSolicitud}</td>
-                          <td>{renderEstadoBadge(item.estado)}</td>
+                          <td>
+                            {/* Rechazo automático POR INSTITUCIÓN: la
+                                solicitud sigue Pendiente para otras
+                                instituciones con stock, pero esta no
+                                debería aceptarla (stock menor a 5). */}
+                            {item.rechazoAutomatico && item.estado === 'pendiente' ? (
+                              <span className="sentr-badge badge-rechazada" title={item.motivoRechazo || 'Stock menor a 5'}>
+                                <span className="sentr-dot dot-rechazada"></span>
+                                Rechazo automático
+                              </span>
+                            ) : (
+                              renderEstadoBadge(item.estado)
+                            )}
+                          </td>
                         </tr>
                       ))
                     ) : (
@@ -417,8 +434,12 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
                     </span>
                   </div>
 
-                  {/* Acciones para Responder la Solicitud: solo admin institucional (rol_id 2) */}
-                  {solicitudSeleccionada.estado === 'pendiente' && puedeResponder && (
+                  {/* Acciones para Responder la Solicitud: solo admin institucional (rol_id 2).
+                      Si el stock propio del tipo solicitado es menor a 5, la
+                      solicitud se marca como rechazo automático para esta
+                      institución y no se puede aceptar (sigue Pendiente para
+                      otras instituciones con stock). */}
+                  {solicitudSeleccionada.estado === 'pendiente' && puedeResponder && !solicitudSeleccionada.rechazoAutomatico && (
                     <div className="sentr-actions-row">
                       <button
                         type="button"
@@ -438,7 +459,13 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
                     </div>
                   )}
 
-                  {solicitudSeleccionada.estado === 'pendiente' && !puedeResponder && (
+                  {solicitudSeleccionada.estado === 'pendiente' && solicitudSeleccionada.rechazoAutomatico && (
+                    <div className="sentr-status-notice notice-rechazada">
+                      Rechazada automáticamente para tu institución: {solicitudSeleccionada.motivoRechazo || 'tu stock del tipo solicitado es menor a 5.'} La solicitud sigue pendiente para otras instituciones con stock.
+                    </div>
+                  )}
+
+                  {solicitudSeleccionada.estado === 'pendiente' && !puedeResponder && !solicitudSeleccionada.rechazoAutomatico && (
                     <div className="sentr-status-notice notice-solo-lectura">
                       Solo el administrador institucional puede responder solicitudes entrantes.
                     </div>
@@ -447,6 +474,7 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
                   {solicitudSeleccionada.estado === 'aceptada' && (
                     <div className="sentr-status-notice notice-aceptada">
                       Esta solicitud ya fue aceptada y transferida.
+                      {solicitudSeleccionada.atendidaPor ? ` Atendida por ${solicitudSeleccionada.atendidaPor}.` : ''}
                     </div>
                   )}
 

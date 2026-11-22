@@ -83,6 +83,127 @@
   border-color: #cbd5e1;
 }
 
+/* Panel de notificaciones de la campana */
+.dona-notif-wrapper {
+  position: relative;
+}
+
+.dona-notif-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background-color: #dc2626;
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.dona-notif-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  cursor: default;
+}
+
+.dona-notif-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  width: 340px;
+  max-width: calc(100vw - 2rem);
+  max-height: 420px;
+  overflow-y: auto;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  z-index: 100;
+}
+
+.dona-notif-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.dona-notif-marcar-todas {
+  background: none;
+  border: none;
+  color: #9e1329;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.dona-notif-marcar-todas:hover {
+  text-decoration: underline;
+}
+
+.dona-notif-empty {
+  padding: 1.25rem 1rem;
+  margin: 0;
+  font-size: 0.85rem;
+  color: #64748b;
+  text-align: center;
+}
+
+.dona-notif-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dona-notif-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+}
+
+.dona-notif-item:last-child {
+  border-bottom: none;
+}
+
+.dona-notif-item:hover {
+  background-color: #f8fafc;
+}
+
+.dona-notif-item.no-leida {
+  background-color: #fdf2f4;
+}
+
+.dona-notif-item.no-leida:hover {
+  background-color: #fbe9ec;
+}
+
+.dona-notif-msg {
+  font-size: 0.85rem;
+  color: #1e293b;
+  line-height: 1.4;
+}
+
+.dona-notif-fecha {
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+
 /* Perfil de usuario */
 .dona-user-profile {
   display: flex;

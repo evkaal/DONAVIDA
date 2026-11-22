@@ -788,17 +788,27 @@ type unidadEntrante struct {
 }
 
 type solicitudEntrante struct {
-	ID             string           `json:"id"`
-	Institucion    string           `json:"institucion"`
-	Solicitante    string           `json:"solicitante"`
-	Telefono       string           `json:"telefono"`
-	Prioridad      string           `json:"prioridad"`
-	Motivo         string           `json:"motivo"`
-	Estado         string           `json:"estado"`
-	FechaSolicitud string           `json:"fechaSolicitud"`
-	FechaCompleta  string           `json:"fechaCompleta"`
-	TotalUnidades  int              `json:"totalUnidades"`
-	Unidades       []unidadEntrante `json:"unidades"`
+	ID         string           `json:"id"`
+	Institucion string          `json:"institucion"`
+	Solicitante string          `json:"solicitante"`
+	Telefono   string           `json:"telefono"`
+	Prioridad  string           `json:"prioridad"`
+	Motivo     string           `json:"motivo"`
+	Estado     string           `json:"estado"`
+	// Institución que atendió la solicitud (desde usuario_responde_id).
+	// Vacío mientras sigue pendiente o si se atendió antes de la
+	// migración 000003.
+	AtendidaPor string `json:"atendidaPor,omitempty"`
+	// Rechazo automático POR INSTITUCIÓN (no global): la solicitud sigue
+	// Pendiente para que otra institución con stock sí pueda atenderla,
+	// pero para la institución que la ve, su stock del tipo solicitado
+	// es menor a 5 y no debería aceptarla.
+	RechazoAutomatico bool   `json:"rechazoAutomatico"`
+	MotivoRechazo     string `json:"motivoRechazo,omitempty"`
+	FechaSolicitud    string `json:"fechaSolicitud"`
+	FechaCompleta     string `json:"fechaCompleta"`
+	TotalUnidades     int    `json:"totalUnidades"`
+	Unidades          []unidadEntrante `json:"unidades"`
 }
 
 // foliosDisponibles devuelve los códigos de unidades disponibles de la
@@ -832,6 +842,66 @@ func foliosDisponibles(instID, tipoID, hemoID, cantidad int) ([]string, int) {
 	return folios, total
 }
 
+// contarDisponibles cuenta las unidades Disponibles de una institución con
+// ese tipo sanguíneo + hemocomponente (mismo patrón EXISTS que GetStock).
+func contarDisponibles(instID, tipoID, hemoID int) int {
+	var n int
+	err := database.DB.QueryRow(`
+		SELECT COUNT(h.id) FROM hemocomponentes h
+		JOIN estados_hemocomponente eh ON h.estado_id = eh.id AND eh.nombre ILIKE 'disponible'
+		WHERE h.institucion_id = $1 AND h.tipo_sangre_id = $2 AND h.tipo_hemocomponente_id = $3
+	`, instID, tipoID, hemoID).Scan(&n)
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+// minimoUmbral devuelve el mínimo de umbrales_stock para esa combinación e
+// institución (5 por defecto si no hay fila, igual que GetStock y
+// GetStockPorTipo). Crítico = disponible <= mínimo.
+func minimoUmbral(instID, tipoID, hemoID int) int {
+	var m sql.NullInt64
+	err := database.DB.QueryRow(`
+		SELECT MIN(stock_minimo) FROM umbrales_stock
+		WHERE tipo_sangre_id = $1 AND tipo_hemocomponente_id = $2
+		  AND ($3 = 0 OR institucion_id = $3)
+	`, tipoID, hemoID, instID).Scan(&m)
+	if err != nil || !m.Valid {
+		return 5
+	}
+	return int(m.Int64)
+}
+
+// nombreHemoParaMensaje muestra "Paquete globular" como "Concentrado
+// eritrocitario": es el mismo producto (ver catalogosService).
+func nombreHemoParaMensaje(componente string) string {
+	if normalizarNombre(componente) == "paquete globular" {
+		return "Concentrado eritrocitario"
+	}
+	return componente
+}
+
+// findOrCreateTipoAlerta busca un tipo de alerta por nombre y lo crea si no
+// existe (la UNIQUE de tipos_alerta evita duplicados). Devuelve su id.
+func findOrCreateTipoAlerta(nombre, descripcion string) (int, error) {
+	var id int
+	err := database.DB.QueryRow(`
+		INSERT INTO tipos_alerta (nombre, descripcion) VALUES ($1, $2)
+		ON CONFLICT (nombre) DO NOTHING
+		RETURNING id`, nombre, descripcion).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	// Ya existía (DO NOTHING no devolvió fila): buscar su id.
+	err2 := database.DB.QueryRow(
+		`SELECT id FROM tipos_alerta WHERE nombre = $1`, nombre).Scan(&id)
+	if err2 != nil {
+		return 0, err2
+	}
+	return id, nil
+}
+
 func GetSolicitudesEntrantes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
@@ -849,6 +919,7 @@ func GetSolicitudesEntrantes(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(i.telefono, '') AS telefono,
 		       LOWER(np.nombre) AS prioridad, COALESCE(s.motivo, '') AS motivo,
 		       LOWER(es.nombre) AS estado,
+		       COALESCE(ir.nombre, '') AS atendida_por,
 		       TO_CHAR(s.fecha_solicitud, 'DD Mon · HH24:MI') AS fecha_solicitud,
 		       TO_CHAR(s.fecha_solicitud, 'DD Mon YYYY · HH24:MI') AS fecha_completa
 		FROM solicitudes_emergencia s
@@ -856,6 +927,8 @@ func GetSolicitudesEntrantes(w http.ResponseWriter, r *http.Request) {
 		JOIN usuarios u ON s.usuario_solicitante_id = u.id
 		JOIN niveles_prioridad np ON s.prioridad_id = np.id
 		JOIN estados_solicitud es ON s.estado_id = es.id
+		LEFT JOIN usuarios ur ON s.usuario_responde_id = ur.id
+		LEFT JOIN instituciones ir ON ur.institucion_id = ir.id
 		WHERE ($1 = 0 OR s.institucion_solicitante_id <> $1)
 		ORDER BY s.fecha_solicitud DESC
 	`, instID)
@@ -870,7 +943,7 @@ func GetSolicitudesEntrantes(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var s solicitudEntrante
 		var numID int
-		if err := rows.Scan(&numID, &s.Institucion, &s.Solicitante, &s.Telefono, &s.Prioridad, &s.Motivo, &s.Estado, &s.FechaSolicitud, &s.FechaCompleta); err != nil {
+		if err := rows.Scan(&numID, &s.Institucion, &s.Solicitante, &s.Telefono, &s.Prioridad, &s.Motivo, &s.Estado, &s.AtendidaPor, &s.FechaSolicitud, &s.FechaCompleta); err != nil {
 			continue
 		}
 		s.ID = fmt.Sprintf("SOL-%04d", numID)
@@ -902,6 +975,23 @@ func GetSolicitudesEntrantes(w http.ResponseWriter, r *http.Request) {
 			s.TotalUnidades += u.Cantidad
 		}
 		drows.Close()
+
+		// Rechazo automático POR INSTITUCIÓN: si la solicitud sigue
+		// pendiente y de algún tipo solicitado tenemos menos de 5
+		// unidades, esta institución no debería aceptarla. La solicitud
+		// SIGUE pendiente globalmente: otra institución con stock sí
+		// puede atenderla. El admin general (instID 0) no atiende
+		// solicitudes, así que no se le marca.
+		if s.Estado == "pendiente" && instID > 0 {
+			for _, u := range s.Unidades {
+				if u.Disponibles < 5 {
+					s.RechazoAutomatico = true
+					s.MotivoRechazo = fmt.Sprintf("Tu stock de %s %s es menor a 5 (disponibles: %d).", u.Tipo, nombreHemoParaMensaje(u.Hemocomponente), u.Disponibles)
+					break
+				}
+			}
+		}
+
 		solicitudes = append(solicitudes, s)
 	}
 	writeJSON(w, http.StatusOK, solicitudes)
@@ -960,6 +1050,166 @@ func ResponderSolicitud(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Estado '"+estadoNombre+"' no existe en estados_solicitud; pídele al administrador que siembre ese estado en la base de datos", http.StatusBadRequest)
 		return
 	}
+
+	// ACEPTAR: condiciones de stock antes de atender. Rechazar sigue el
+	// camino de siempre (sin chequeos de stock ni notificación).
+	if accion == "aceptar" {
+		// (0) La solicitud debe existir y seguir pendiente. Sin esto, dos
+		// instituciones podrían "aceptar" la misma y avisar dos veces.
+		var estadoActual string
+		var instSolicitante int
+		err = database.DB.QueryRow(`
+			SELECT LOWER(es.nombre), s.institucion_solicitante_id
+			FROM solicitudes_emergencia s
+			JOIN estados_solicitud es ON s.estado_id = es.id
+			WHERE s.id = $1
+		`, numID).Scan(&estadoActual, &instSolicitante)
+		if err != nil {
+			http.Error(w, "Solicitud no encontrada", http.StatusNotFound)
+			return
+		}
+		if estadoActual != "pendiente" {
+			http.Error(w, "Esta solicitud ya fue atendida (estado actual: "+estadoActual+").", http.StatusBadRequest)
+			return
+		}
+		if sesion.InstitucionID == nil {
+			http.Error(w, "Tu usuario no tiene institución asignada y no se puede verificar tu stock.", http.StatusBadRequest)
+			return
+		}
+		instID := *sesion.InstitucionID
+
+		// Detalles solicitados (tipo, hemocomponente, cantidad).
+		type detalleSolicitud struct {
+			tipoID, hemoID, cantidad int
+			tipo, hemo               string
+		}
+		drows, err := database.DB.Query(`
+			SELECT sd.tipo_sangre_id, sd.tipo_hemocomponente_id, sd.cantidad,
+			       ts.grupo_abo || ts.factor_rh AS tipo, th.componente AS hemocomponente
+			FROM solicitud_detalles sd
+			JOIN tipos_sangre ts ON sd.tipo_sangre_id = ts.id
+			JOIN tipos_hemocomponente th ON sd.tipo_hemocomponente_id = th.id
+			WHERE sd.solicitud_id = $1
+		`, numID)
+		if err != nil {
+			http.Error(w, "Error al leer los detalles de la solicitud", http.StatusInternalServerError)
+			return
+		}
+		detalles := []detalleSolicitud{}
+		for drows.Next() {
+			var d detalleSolicitud
+			if err := drows.Scan(&d.tipoID, &d.hemoID, &d.cantidad, &d.tipo, &d.hemo); err == nil {
+				detalles = append(detalles, d)
+			}
+		}
+		drows.Close()
+		if len(detalles) == 0 {
+			http.Error(w, "La solicitud no tiene unidades detalladas.", http.StatusBadRequest)
+			return
+		}
+
+		// (a) Suficiencia: hay que contar con unidades de ese tipo.
+		// (b) Nivel crítico: atender no debe dejar el stock propio en
+		// nivel crítico (crítico = disponible <= mínimo, así que tras
+		// atender debe quedar disponible > mínimo).
+		// Aceptar NO mueve ni descuenta unidades: solo son las
+		// condiciones para poder aceptar; el descuento/asignación de
+		// unidades sigue siendo un flujo aparte.
+		for _, d := range detalles {
+			hemoMsg := nombreHemoParaMensaje(d.hemo)
+			disp := contarDisponibles(instID, d.tipoID, d.hemoID)
+			if disp < d.cantidad {
+				http.Error(w, fmt.Sprintf("No cuentas con unidades suficientes de %s %s para atender esta solicitud (disponibles: %d, solicitadas: %d).", d.tipo, hemoMsg, disp, d.cantidad), http.StatusBadRequest)
+				return
+			}
+			min := minimoUmbral(instID, d.tipoID, d.hemoID)
+			if disp-d.cantidad <= min {
+				http.Error(w, fmt.Sprintf("Atender esta solicitud dejaría tu stock de %s %s en nivel crítico (quedarían %d, mínimo %d).", d.tipo, hemoMsg, disp-d.cantidad, min), http.StatusBadRequest)
+				return
+			}
+		}
+
+		// Nombre de la institución que atiende (respuesta y notificación).
+		var nombreInstAcepta string
+		_ = database.DB.QueryRow(`SELECT nombre FROM instituciones WHERE id = $1`, instID).Scan(&nombreInstAcepta)
+		folio := fmt.Sprintf("SOL-%04d", numID)
+
+		// Tipo de alerta (se crea si no existe; la UNIQUE evita duplicados).
+		tipoAlertaID, err := findOrCreateTipoAlerta("solicitud_atendida", "Una solicitud de emergencia fue atendida por otra institución")
+		if err != nil {
+			log.Printf("Error al resolver tipo de alerta: %v", err)
+			http.Error(w, "Error al responder la solicitud", http.StatusInternalServerError)
+			return
+		}
+
+		// Aceptar + registrar quién respondió + avisar a las demás
+		// instituciones, todo en una transacción.
+		tx, err := database.DB.Begin()
+		if err != nil {
+			http.Error(w, "Error al responder la solicitud", http.StatusInternalServerError)
+			return
+		}
+		defer tx.Rollback()
+
+		res, err := tx.Exec(`
+			UPDATE solicitudes_emergencia
+			SET estado_id = $1, fecha_cierre = NOW(), usuario_responde_id = $2
+			WHERE id = $3
+			  AND estado_id = (SELECT id FROM estados_solicitud WHERE LOWER(nombre) = 'pendiente')
+		`, estadoID, sesion.ID, numID)
+		if err != nil {
+			http.Error(w, "Error al responder la solicitud", http.StatusInternalServerError)
+			return
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			http.Error(w, "Esta solicitud ya fue atendida.", http.StatusBadRequest)
+			return
+		}
+
+		var alertaID int
+		err = tx.QueryRow(`
+			INSERT INTO alertas (tipo_alerta_id, institucion_id, solicitud_id, mensaje)
+			VALUES ($1, $2, $3, $4)
+			RETURNING id
+		`, tipoAlertaID, instID, numID, fmt.Sprintf("La solicitud %s fue atendida por %s.", folio, nombreInstAcepta)).Scan(&alertaID)
+		if err != nil {
+			log.Printf("Error al crear alerta de solicitud atendida: %v", err)
+			http.Error(w, "Error al responder la solicitud", http.StatusInternalServerError)
+			return
+		}
+
+		// Notificación a los usuarios activos de las DEMÁS instituciones
+		// (todas menos la que acepta y menos la solicitante): así saben
+		// que ya fue atendida y no envían unidades de más.
+		if _, err := tx.Exec(`
+			INSERT INTO notificaciones (alerta_id, usuario_id)
+			SELECT $1, id FROM usuarios
+			WHERE estado = true
+			  AND institucion_id IS NOT NULL
+			  AND institucion_id <> $2
+			  AND institucion_id <> $3
+			ON CONFLICT (alerta_id, usuario_id) DO NOTHING
+		`, alertaID, instID, instSolicitante); err != nil {
+			log.Printf("Error al crear notificaciones de solicitud atendida: %v", err)
+			http.Error(w, "Error al responder la solicitud", http.StatusInternalServerError)
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			http.Error(w, "Error al responder la solicitud", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"mensaje":     "Solicitud " + estadoNombre + " con éxito",
+			"id":          numID,
+			"estado":      estadoNombre,
+			"atendidaPor": nombreInstAcepta,
+		})
+		return
+	}
+
 	res, err := database.DB.Exec(`
 		UPDATE solicitudes_emergencia SET estado_id = $1, fecha_cierre = NOW() WHERE id = $2
 	`, estadoID, numID)
