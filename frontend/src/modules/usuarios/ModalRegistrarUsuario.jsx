@@ -18,6 +18,31 @@ const contrasenaSegura = (p) => {
   return /[A-Z]/.test(p) && /[a-z]/.test(p) && /[0-9]/.test(p);
 };
 
+// Las 4 reglas descompuestas para mostrarlas en vivo mientras el usuario
+// escribe (misma regla que contrasenaSegura y que el backend).
+const reglasContrasena = (p) => [
+  { id: 'longitud', label: 'Mínimo 8 caracteres', cumple: (p || '').length >= 8 },
+  { id: 'mayuscula', label: 'Una mayúscula', cumple: /[A-Z]/.test(p || '') },
+  { id: 'minuscula', label: 'Una minúscula', cumple: /[a-z]/.test(p || '') },
+  { id: 'numero', label: 'Un número', cumple: /[0-9]/.test(p || '') },
+];
+
+// Iconos de ojo (SVG, sin emojis) para mostrar/ocultar la contraseña.
+const IconoOjo = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+const IconoOjoCerrado = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+    <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+    <line x1="1" y1="1" x2="23" y2="23" />
+  </svg>
+);
+
 export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, usuarioActual }) {
   // Sesión del usuario que registra (prop o localStorage): de ahí sale su
   // institución, que es la que se usa para el usuario nuevo.
@@ -45,6 +70,9 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
 
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [mostrarConfirm, setMostrarConfirm] = useState(false);
+  // Reglas en vivo y coincidencia (se recalculan al escribir).
+  const reglas = reglasContrasena(password);
+  const contrasenasCoinciden = confirmPassword !== '' && password === confirmPassword;
   // Error de validación visible EN EL FORMULARIO (inline, no alert).
   const [errorForm, setErrorForm] = useState('');
   // Aviso sencillo (modal) en lugar de alert() del navegador.
@@ -182,26 +210,63 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
             <div className="form-row-modal">
               <div className="form-group-modal">
                 <label className="form-label-modal">Contraseña</label>
-                <input
-                  type={mostrarPassword ? 'text' : 'password'}
-                  className="input-field-modal"
-                  placeholder="••••••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
+                <div className="input-icon-wrapper-modal">
+                  <input
+                    type={mostrarPassword ? 'text' : 'password'}
+                    className="input-field-modal input-password-modal"
+                    placeholder="••••••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="password-eye-btn-modal"
+                    aria-label={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    title={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    onClick={() => setMostrarPassword(!mostrarPassword)}
+                  >
+                    {mostrarPassword ? IconoOjoCerrado : IconoOjo}
+                  </button>
+                </div>
+                {/* Requisitos en vivo: se marcan en verde al cumplirse */}
+                {password.length > 0 && (
+                  <ul className="reglas-contrasena">
+                    {reglas.map((r) => (
+                      <li key={r.id} className={r.cumple ? 'regla-ok' : 'regla-pendiente'}>
+                        <span className="regla-marca">{r.cumple ? '✓' : '○'}</span> {r.label}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               <div className="form-group-modal">
                 <label className="form-label-modal">Confirmar contraseña</label>
-                <input
-                  type={mostrarConfirm ? 'text' : 'password'}
-                  className="input-field-modal"
-                  placeholder="••••••••••••"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                />
+                <div className="input-icon-wrapper-modal">
+                  <input
+                    type={mostrarConfirm ? 'text' : 'password'}
+                    className="input-field-modal input-password-modal"
+                    placeholder="••••••••••••"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="password-eye-btn-modal"
+                    aria-label={mostrarConfirm ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    title={mostrarConfirm ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    onClick={() => setMostrarConfirm(!mostrarConfirm)}
+                  >
+                    {mostrarConfirm ? IconoOjoCerrado : IconoOjo}
+                  </button>
+                </div>
+                {confirmPassword.length > 0 && (
+                  <span className={contrasenasCoinciden ? 'coincide-ok' : 'coincide-error'}>
+                    {contrasenasCoinciden ? '✓ Las contraseñas coinciden' : '✗ Las contraseñas no coinciden'}
+                  </span>
+                )}
               </div>
             </div>
 

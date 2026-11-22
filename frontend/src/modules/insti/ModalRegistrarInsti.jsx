@@ -27,27 +27,31 @@ export default function ModalRegistrarInsti({ isOpen, onClose, onSaveSuccess }) 
   // Aviso sencillo (modal) en lugar de alert() del navegador.
   const [aviso, setAviso] = useState(null);
 
-  // Cargar catálogos al abrir el modal.
+  // Cargar catálogos al abrir el modal. Se extrae a función para poder
+  // recargar la lista de colonias tras guardar una nueva (si no se
+  // recarga, el siguiente hospital no puede elegir la colonia recién
+  // creada y "no la reconoce").
+  const cargarCatalogos = async () => {
+    const [tiposData, coloniasData] = await Promise.all([
+      obtenerTiposInstitucion(),
+      obtenerColonias(),
+    ]);
+    if (tiposData.length > 0) {
+      setTipos(tiposData);
+      setTipoInstitucionId(tiposData[0].id);
+    }
+    setColonias(coloniasData);
+    if (coloniasData.length > 0) {
+      setColoniaId(String(coloniasData[0].id));
+      setCodigoPostal(coloniasData[0].codigo_postal || '');
+    } else {
+      setColoniaId('nueva');
+    }
+  };
+
   useEffect(() => {
     if (!isOpen) return;
-    const cargar = async () => {
-      const [tiposData, coloniasData] = await Promise.all([
-        obtenerTiposInstitucion(),
-        obtenerColonias(),
-      ]);
-      if (tiposData.length > 0) {
-        setTipos(tiposData);
-        setTipoInstitucionId(tiposData[0].id);
-      }
-      setColonias(coloniasData);
-      if (coloniasData.length > 0) {
-        setColoniaId(String(coloniasData[0].id));
-        setCodigoPostal(coloniasData[0].codigo_postal || '');
-      } else {
-        setColoniaId('nueva');
-      }
-    };
-    cargar();
+    cargarCatalogos().catch((err) => console.error("Error al cargar catálogos:", err));
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -64,15 +68,19 @@ export default function ModalRegistrarInsti({ isOpen, onClose, onSaveSuccess }) 
     }
   };
 
-  const limpiar = () => {
+  const limpiar = (listaColonias = colonias, seleccionarId = null) => {
     setNombre('');
     setTelefono('');
     setCalleNumero('');
     setActiva(true);
     setColoniaNuevaNombre('');
-    if (colonias.length > 0) {
-      setColoniaId(String(colonias[0].id));
-      setCodigoPostal(colonias[0].codigo_postal || '');
+    if (seleccionarId) {
+      setColoniaId(String(seleccionarId));
+      const sel = listaColonias.find((c) => String(c.id) === String(seleccionarId));
+      setCodigoPostal(sel?.codigo_postal || '');
+    } else if (listaColonias.length > 0) {
+      setColoniaId(String(listaColonias[0].id));
+      setCodigoPostal(listaColonias[0].codigo_postal || '');
     } else {
       setColoniaId('nueva');
       setCodigoPostal('');
@@ -117,11 +125,32 @@ export default function ModalRegistrarInsti({ isOpen, onClose, onSaveSuccess }) 
       } else {
         payload.colonia_id = Number(coloniaId);
       }
-      await registrarInstitucion(payload);
-      if (onSaveSuccess) onSaveSuccess();
+      const resultado = await registrarInstitucion(payload);
+      // La colonia recién creada (o resuelta) ya viene en la respuesta.
+      // Se añade a la lista local para que el siguiente hospital pueda
+      // elegirla sin cerrar y reabrir el modal.
+      const coloniaResuelta = resultado?.colonia || null;
       if (guardarOtra) {
-        limpiar();
+        // "Guardar y agregar otra" mantiene el modal abierto (antes el
+        // onSaveSuccess del padre lo cerraba): se recarga el catálogo y
+        // se deja seleccionada la colonia recién creada.
+        let lista = colonias;
+        try {
+          const frescas = await obtenerColonias();
+          if (Array.isArray(frescas) && frescas.length > 0) {
+            lista = frescas;
+            setColonias(frescas);
+          }
+        } catch (e) {
+          console.error("Error al recargar colonias:", e);
+        }
+        if (coloniaResuelta?.id && !lista.some((c) => String(c.id) === String(coloniaResuelta.id))) {
+          lista = [...lista, { id: coloniaResuelta.id, nombre: coloniaResuelta.nombre, codigo_postal: coloniaResuelta.codigo_postal }];
+          setColonias(lista);
+        }
+        limpiar(lista, coloniaResuelta?.id || null);
       } else {
+        if (onSaveSuccess) onSaveSuccess();
         limpiar();
         onClose();
       }

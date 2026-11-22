@@ -909,11 +909,23 @@ func RegistrarInstitucion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Colonia resuelta (nueva o existente): se devuelve para que el
+	// frontend pueda añadirla a su lista sin esperar a recargar el
+	// catálogo (ver ModalRegistrarInsti: tras guardar, la colonia recién
+	// creada ya es elegible para el siguiente hospital).
+	var colNombre, colCP string
+	_ = database.DB.QueryRow(`SELECT nombre, codigo_postal FROM colonias WHERE id = $1`, coloniaID).Scan(&colNombre, &colCP)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"mensaje": "Institución registrada con éxito",
 		"id":      nuevoID,
+		"colonia": map[string]interface{}{
+			"id":            coloniaID,
+			"nombre":        colNombre,
+			"codigo_postal": colCP,
+		},
 	})
 }
 
@@ -1029,34 +1041,72 @@ func EliminarUsuario(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Eliminar primero los registros dependientes en solicitudes_emergencia (si aplica)
-	_, err := database.DB.Exec(`DELETE FROM solicitudes_emergencia WHERE usuario_solicitante_id = $1`, userID)
+	// Todo en una transacción: si algo falla, no queda el usuario a
+	// medias (p. ej. sin solicitudes pero sin borrar).
+	tx, err := database.DB.Begin()
 	if err != nil {
-		log.Printf("Advertencia al limpiar solicitudes del usuario: %v", err)
-		// Puedes decidir si continuar o retornar error
+		http.Error(w, "Error al eliminar el usuario en la base de datos", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	// 0. El usuario debe existir y, si quien borra es admin institucional
+	// (rol 2), debe ser uno que ÉL creó. Se comprueba ANTES de limpiar
+	// nada: si no es suyo, no se toca ningún dependiente.
+	var creadoPor sql.NullInt64
+	err = tx.QueryRow(`SELECT creado_por FROM usuarios WHERE id = $1`, userID).Scan(&creadoPor)
+	if err != nil {
+		http.Error(w, "Usuario no encontrado", http.StatusNotFound)
+		return
+	}
+	if sesion.RolID == 2 && (!creadoPor.Valid || int(creadoPor.Int64) != sesion.ID) {
+		http.Error(w, "Usuario no encontrado", http.StatusNotFound)
+		return
 	}
 
-	// 2. Ahora procedemos a borrar físicamente al usuario de la base de datos
-	// (un admin institucional solo puede borrar los usuarios que él creó).
-	var query string
-	var args []interface{}
-	if sesion.RolID == 2 {
-		query = `DELETE FROM usuarios WHERE id = $1 AND creado_por = $2`
-		args = []interface{}{userID, sesion.ID}
-	} else {
-		query = `DELETE FROM usuarios WHERE id = $1`
-		args = []interface{}{userID}
+	// 1. Dependientes que impiden el DELETE por llave foránea. Antes solo
+	// se limpiaban las solicitudes donde era solicitante, así que borrar
+	// a un usuario sin institución —o con notificaciones, auditoría,
+	// respuestas o usuarios creados— fallaba con error 500:
+	// - notificaciones dirigidas a él (usuario_id NOT NULL).
+	// - registros de auditoría suyos.
+	// - respuestas suyas: quedan en NULL (la solicitud y su asignación
+	//   siguen existiendo, solo pierden el autor).
+	// - usuarios que él creó: quedan sin creador (los sigue viendo solo
+	//   el admin general).
+	// - solicitudes donde es solicitante: se eliminan (como antes).
+	limpiezas := []string{
+		`DELETE FROM notificaciones WHERE usuario_id = $1`,
+		`DELETE FROM auditoria_logs WHERE usuario_id = $1`,
+		`UPDATE asignaciones_unidades SET usuario_responde_id = NULL WHERE usuario_responde_id = $1`,
+		`UPDATE solicitudes_emergencia SET usuario_responde_id = NULL WHERE usuario_responde_id = $1`,
+		`UPDATE usuarios SET creado_por = NULL WHERE creado_por = $1`,
+		`DELETE FROM solicitudes_emergencia WHERE usuario_solicitante_id = $1`,
 	}
-	result, err := database.DB.Exec(query, args...)
+	for _, q := range limpiezas {
+		if _, err := tx.Exec(q, userID); err != nil {
+			log.Printf("Error al limpiar dependientes del usuario %s: %v", userID, err)
+			http.Error(w, "Error al eliminar el usuario en la base de datos", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// 2. Borrar físicamente al usuario.
+	result, err := tx.Exec(`DELETE FROM usuarios WHERE id = $1`, userID)
 	if err != nil {
 		log.Printf("Error al eliminar usuario en BD: %v", err)
 		http.Error(w, "Error al eliminar el usuario en la base de datos", http.StatusInternalServerError)
 		return
 	}
-
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
 		http.Error(w, "Usuario no encontrado", http.StatusNotFound)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Printf("Error al confirmar eliminación de usuario: %v", err)
+		http.Error(w, "Error al eliminar el usuario en la base de datos", http.StatusInternalServerError)
 		return
 	}
 

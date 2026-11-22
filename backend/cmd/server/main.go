@@ -132,6 +132,10 @@ func main() {
 	mux.HandleFunc("/api/solicitudes/entrantes", handlers.GetSolicitudesEntrantes)
 	mux.HandleFunc("/api/solicitudes/entrantes/", handlers.ResponderSolicitud)
 
+	// Notificaciones: GET lista del usuario, PATCH /{id}/leida marca leída
+	mux.HandleFunc("/api/notificaciones", handlers.GetNotificaciones)
+	mux.HandleFunc("/api/notificaciones/", handlers.MarcarNotificacionLeida)
+
 	// Catálogos simples para formularios
 	mux.HandleFunc("/api/catalogos/tipos-institucion", handlers.GetTiposInstitucion)
 	mux.HandleFunc("/api/catalogos/colonias", handlers.GetColonias)

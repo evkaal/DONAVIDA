@@ -37,7 +37,6 @@ export const eliminarUsuarioService = async (id) => {
 };
 
 // Dar de baja (estado=false) o reactivar (estado=true) un usuario.
-// El usuario dado de baja sigue en la lista y no puede iniciar sesión.
 export const cambiarEstadoUsuario = async (id, estado) => {
   const response = await api.patch(`/usuarios/${id}/estado`, { estado });
   return response.data;
