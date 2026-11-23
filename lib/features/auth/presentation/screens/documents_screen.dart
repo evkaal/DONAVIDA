@@ -183,9 +183,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected
-                    ? AppColors.primary
-                    : const Color(0xFF64748B),
+                color: isSelected ? AppColors.primary : const Color(0xFF64748B),
               ),
             ),
           ),
@@ -257,9 +255,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           ),
         ],
       ),
-      child: Column(
-        children: _buildItemsForTab(),
-      ),
+      child: Column(children: _buildItemsForTab()),
     );
   }
 
@@ -279,20 +275,17 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         _buildRequirementItem(
           icon: AppAssets.icReloj,
           title: 'Ayuno',
-          description:
-              'De 4 a 8 horas. Evita grasas y lácteos la noche anterior y en la mañana de la donación. Puedes tomar agua, jugos o café sin leche antes de ir.',
+          description: 'De 4 a 8 horas. Evita grasas y lácteos la noche anterior y en la mañana de la donación. Puedes tomar agua, jugos o café sin leche antes de ir.',
         ),
         _buildRequirementItem(
           icon: AppAssets.icCorazon,
           title: 'Salud',
-          description:
-              'Sentirte bien: sin gripe, tos, diarrea o infecciones recientes, ni haber tomado medicamentos en los últimos 5 días.',
+          description: 'Sentirte bien: sin gripe, tos, diarrea o infecciones recientes, ni haber tomado medicamentos en los últimos 5 días.',
         ),
         _buildRequirementItem(
-          icon: AppAssets.icCheckCir,
+          icon: AppAssets.icEstiloV,
           title: 'Estilo de vida',
-          description:
-              'Sin alcohol en las últimas 72 horas. Tatuajes, perforaciones o micropigmentación con más de 12 meses de antigüedad.',
+          description: 'Sin alcohol en las últimas 72 horas. Tatuajes, perforaciones o micropigmentación con más de 12 meses de antigüedad.',
         ),
       ];
     } else if (_selectedTabIndex == 1) {
@@ -306,20 +299,17 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         _buildRequirementItem(
           icon: AppAssets.icDocFirmado,
           title: 'Formatos',
-          description:
-              'El hospital te dará el cuestionario médico y la hoja de consentimiento al llegar. No necesitas llevar formatos impresos.',
+          description: 'El hospital te dará el cuestionario médico y la hoja de consentimiento al llegar. No necesitas llevar formatos impresos.',
         ),
         _buildRequirementItem(
           icon: AppAssets.icCita,
           title: 'Cita o fila',
-          description:
-              'Si el hospital tiene sistema digital (como el IMSS), lleva el comprobante de cita en tu celular. Si no hay citas, llega muy temprano: las fichas suelen ser limitadas.',
+          description: 'Si el hospital tiene sistema digital (como el IMSS), lleva el comprobante de cita en tu celular. Si no hay citas, llega muy temprano: las fichas suelen ser limitadas.',
         ),
         _buildRequirementItem(
           icon: AppAssets.icUsuarioArchivo,
           title: 'Datos del paciente',
-          description:
-              'Si vas a un hospital, lleva el nombre completo del paciente, su número de cama y el servicio o piso donde está internado.',
+          description: 'Si vas a un hospital, lleva el nombre completo del paciente, su número de cama y el servicio o piso donde está internado.',
         ),
       ];
     } else {
@@ -332,26 +322,22 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         _buildRequirementItem(
           icon: AppAssets.icDocFirmado,
           title: 'Formatos',
-          description:
-              'Te los entrega el hospital al llegar; a veces se llenan de forma digital en una tableta.',
+          description: 'Te los entrega el hospital al llegar; a veces se llenan de forma digital en una tableta.',
         ),
         _buildRequirementItem(
           icon: AppAssets.icCita,
           title: 'Cita previa',
-          description:
-              'Es obligatoria: agéndala por teléfono o en la página del hospital. Lleva la confirmación o el código que te envíen al celular.',
+          description: 'Es obligatoria: agéndala por teléfono o en la página del hospital. Lleva la confirmación o el código que te envíen al celular.',
         ),
         _buildRequirementItem(
           icon: AppAssets.icEstacionamiento,
           title: 'Estacionamiento',
-          description:
-              'Guarda tu boleto: la mayoría de los hospitales privados lo sellan para que sea gratis para donadores.',
+          description: 'Guarda tu boleto: la mayoría de los hospitales privados lo sellan para que sea gratis para donadores.',
         ),
         _buildRequirementItem(
           icon: AppAssets.icUsuarioArchivo,
           title: 'Datos del paciente',
-          description:
-              'Si vas a un hospital, ten a la mano el nombre completo del paciente y el número de habitación.',
+          description: 'Si vas a un hospital, ten a la mano el nombre completo del paciente y el número de habitación.',
         ),
       ];
     }
