@@ -5,6 +5,14 @@ export const registrarUsuario = async (userData) => {
   return response.data;
 };
 
+// Enviar un correo de prueba con Resend (solo admin general).
+// Sin botón en la UI por ahora: la prueba se hace por curl a
+// POST /api/admin/test-email con { email }.
+export const enviarCorreoPrueba = async (email) => {
+  const response = await api.post('/admin/test-email', { email });
+  return response.data;
+};
+
 export const obtenerInstituciones = async () => {
   try {
     const response = await api.get('/instituciones');

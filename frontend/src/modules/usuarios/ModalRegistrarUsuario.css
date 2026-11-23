@@ -163,6 +163,16 @@
   color: #94a3b8;
 }
 
+/* El textarea del mensaje de bienvenida usa el mismo estilo de input,
+   pero sin el padding izquierdo de los iconos y con altura libre. */
+textarea.input-field-modal {
+  padding: 0.65rem 1rem;
+  resize: vertical;
+  min-height: 72px;
+  font-family: inherit;
+  line-height: 1.45;
+}
+
 .input-readonly-modal {
   background-color: #f8fafc;
   color: #64748b;

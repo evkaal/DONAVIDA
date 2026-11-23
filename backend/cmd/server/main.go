@@ -92,6 +92,8 @@ func main() {
 
 	// Rutas de dashboard y stock
 	mux.HandleFunc("/api/admin/resumen", handlers.GetAdminResumen)
+	// Prueba de correo con Resend (solo admin general): POST /api/admin/test-email
+	mux.HandleFunc("/api/admin/test-email", handlers.TestEmail)
 	mux.HandleFunc("/api/dashboard/stats", handlers.GetDashboardStats)
 	mux.HandleFunc("/api/dashboard/stock-tipos", handlers.GetStockPorTipo)
 	mux.HandleFunc("/api/solicitudes/recientes", handlers.GetSolicitudesRecientes)
