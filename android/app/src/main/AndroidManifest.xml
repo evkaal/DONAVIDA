@@ -1,6 +1,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Permiso de internet requerido para cargar tiles del mapa OpenStreetMap -->
+    <!-- Internet: tiles del mapa OpenStreetMap y peticiones a la API -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Cámara: foto del comprobante de donación -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+
+    <!-- Galería: seleccionar imagen del comprobante desde el celular -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+
+    <!-- Ubicación: detectar posición real del usuario en el mapa -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <application
         android:label="DONAVIDA"
         android:name="${applicationName}"
