@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"donavida-backend/internal/database"
+	"donavida-backend/internal/email"
 	"encoding/json"
 "database/sql"
   "strings"
@@ -82,6 +83,10 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		Password      string `json:"password"`
 		RolID         int    `json:"rol_id"`
 		InstitucionId *int   `json:"institucion_id"` // Usamos puntero para manejar nulos si es un admin general
+		// Mensaje opcional del admin general para el correo de bienvenida
+		// (máx. 500 caracteres; vacío = sin mensaje). El frontend solo
+		// muestra este campo al admin general.
+		Mensaje string `json:"mensaje"`
 	}
 
 	err := json.NewDecoder(r.Body).Decode(&input)
@@ -151,6 +156,21 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error al registrar usuario: %v", err)
 		http.Error(w, "Error al registrar el usuario en la BD: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	// Correo de bienvenida (fire-and-forget, en goroutine): el envío NUNCA
+	// debe hacer fallar ni ralentizar el registro; si Resend falla, solo
+	// queda en el log del servicio. Solo si el usuario nuevo tiene correo.
+	if strings.TrimSpace(input.Email) != "" {
+		mensaje := strings.TrimSpace(input.Mensaje)
+		if len([]rune(mensaje)) > 500 {
+			mensaje = string([]rune(mensaje)[:500])
+		}
+		go func() {
+			if err := email.SendBienvenida(input.Email, input.Nombre, mensaje); err != nil {
+				log.Printf("No se pudo enviar el correo de bienvenida a %s: %v", input.Email, err)
+			}
+		}()
 	}
 
 	w.WriteHeader(http.StatusCreated)

@@ -66,6 +66,9 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
   const [institucionId, setInstitucionId] = useState('');
   const [institucionesList, setInstitucionesList] = useState([]);
   const [cuentaActiva, setCuentaActiva] = useState(true);
+  // Mensaje personalizado para el correo de bienvenida (solo admin
+  // general, máx. 500 caracteres). Se envía con Resend al crear el usuario.
+  const [mensaje, setMensaje] = useState('');
   const [cargando, setCargando] = useState(false);
 
   const [mostrarPassword, setMostrarPassword] = useState(false);
@@ -137,6 +140,11 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
       password: password,
       rol_id: Number(rolId),
       institucion_id: institucionId ? Number(institucionId) : null,
+      // Mensaje del correo de bienvenida: solo lo ve y lo manda el admin
+      // general, y solo si escribió algo (máx. 500 caracteres).
+      ...(esAdminGen && mensaje.trim()
+        ? { mensaje: mensaje.trim().slice(0, 500) }
+        : {}),
     };
 
     try {
@@ -150,6 +158,7 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
         setCorreo('');
         setPassword('');
         setConfirmPassword('');
+        setMensaje('');
       } else {
         onClose();
       }
@@ -319,6 +328,23 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
                     readOnly
                   />
                 </div>
+              </div>
+            )}
+
+            {/* Mensaje del correo de bienvenida (solo admin general):
+                se envía por correo con Resend al crear el usuario. */}
+            {esAdminGen && (
+              <div className="form-group-modal">
+                <label className="form-label-modal">Mensaje personalizado (opcional)</label>
+                <textarea
+                  className="input-field-modal"
+                  placeholder="Mensaje que recibirá el usuario en su correo de bienvenida…"
+                  value={mensaje}
+                  onChange={(e) => setMensaje(e.target.value)}
+                  maxLength={500}
+                  rows={3}
+                />
+                <span className="input-helper-text">Se enviará un correo de bienvenida a este usuario.</span>
               </div>
             )}
           </div>
