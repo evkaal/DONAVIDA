@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Color inicial del degradado de Figma (0% #D81B3A) para el Splash nativo -->
+    <color name="splash_background">#D81B3A</color>
+</resources>
