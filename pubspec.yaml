@@ -2,7 +2,7 @@ name: donavida_app
 description: "Aplicación móvil DONAVIDA para gestión hospitalaria de hemoderivados."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.5.2+10
 
 environment:
   sdk: ^3.13.7
@@ -33,6 +33,7 @@ dependencies:
   # Mapas reales con OpenStreetMap (Sin tarjeta ni API keys)
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
+  package_info_plus: ^9.0.1
 
 dev_dependencies:
   flutter_test:

@@ -8,6 +8,8 @@ import '../../../../core/storage/secure_storage_service.dart';
 import '../../../auth/presentation/screens/main_menu_screen.dart';
 import '../../../auth/presentation/screens/select_account_screen.dart';
 
+import 'package:package_info_plus/package_info_plus.dart';
+
 // Front: Pantalla Splash con verificación de sesión existente
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -123,13 +125,23 @@ class _SplashScreenState extends State<SplashScreen>
                   alignment: Alignment.bottomCenter,
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 48.0),
-                    child: Text(
-                      'Versión 1.0',
-                      style: GoogleFonts.inter(
-                        color: Colors.white.withOpacity(0.60),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
-                      ),
+                    child: FutureBuilder<PackageInfo>(
+                      future: PackageInfo.fromPlatform(),
+                      builder: (context, snapshot) {
+                        // Mientras carga (toma milisegundos), muestra un texto vacío para no mover el diseño
+                        final version = snapshot.hasData
+                            ? 'Versión ${snapshot.data!.version}'
+                            : '';
+
+                        return Text(
+                          version,
+                          style: GoogleFonts.inter(
+                            color: Colors.white.withOpacity(0.60),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
