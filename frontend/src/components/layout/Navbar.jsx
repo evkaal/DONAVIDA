@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './Navbar.css';
 import { obtenerNotificaciones, marcarNotificacionLeida } from '../../services/notificacionesService';
+import { obtenerToken } from '../../services/sesionService';
 
 export default function Navbar({
   usuario,
@@ -19,7 +20,7 @@ export default function Navbar({
   const cargarNotificaciones = async () => {
     // Sin token no hay sesión: no se consulta nada (la campana no debe
     // romper la pantalla de login ni ninguna otra).
-    if (!localStorage.getItem('token')) return;
+    if (!obtenerToken()) return;
     try {
       const data = await obtenerNotificaciones();
       setNotificaciones(Array.isArray(data) ? data : []);

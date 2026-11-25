@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { obtenerUsuarioSesion } from '../../services/sesionService';
 import './SolicitudUnidades.css';
 import { Sidebar, Navbar } from '../../components/layout';
 import ModalPrevisualizacion from './ModalPrevisualizacion';
@@ -10,7 +11,7 @@ export default function SolicitudUnidades({ usuario, onCambiarModulo, onLogout }
   // Datos del solicitante tomados de la sesión. Sin fallbacks inventados:
   // si el usuario no tiene institución, se muestra "Sin institución" y el
   // formulario queda deshabilitado (el backend tampoco aceptaría la solicitud).
-  const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
+  const usuarioSesion = usuario || obtenerUsuarioSesion();
   const institucionSesion = usuarioSesion?.institucion || 'Sin institución';
   const solicitanteSesion = usuarioSesion?.nombre || 'Sin sesión';
   const sinInstitucion = !usuarioSesion?.institucion_id;

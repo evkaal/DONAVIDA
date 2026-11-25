@@ -323,37 +323,22 @@ func GetDashboardStats(w http.ResponseWriter, r *http.Request) {
 		SolPendientes = 0
 	}
 
-	// 5. Niveles críticos — MISMO criterio que la gráfica de
-	// GetStockPorTipo: se cuentan las COMBINACIONES (tipo sanguíneo ×
-	// hemocomponente) cuyo disponible es <= su mínimo de umbrales_stock
-	// (5 por defecto, igual que GetStock, si no hay fila de umbral para
-	// esa combinación). Antes solo se contaban las filas que existían en
-	// umbrales_stock, así que con esa tabla vacía el KPI era 0 aunque la
-	// gráfica marcara barras en rojo por el defecto 5.
-	err = database.DB.QueryRow(`
-		SELECT COUNT(*) FROM (
-			SELECT ts.id AS ts_id, th.id AS th_id,
-			       COUNT(h.id) AS cantidad,
-			       COALESCE(MIN(u.stock_minimo), 5) AS minimo
-			FROM tipos_sangre ts
-			CROSS JOIN tipos_hemocomponente th
-			LEFT JOIN hemocomponentes h
-			       ON h.tipo_sangre_id = ts.id
-			      AND h.tipo_hemocomponente_id = th.id
-			      AND ($1 = 0 OR h.institucion_id = $1)
-			      AND EXISTS (SELECT 1 FROM estados_hemocomponente eh
-			                   WHERE eh.id = h.estado_id
-			                     AND eh.nombre ILIKE 'disponible')
-			LEFT JOIN umbrales_stock u
-			       ON u.tipo_sangre_id = ts.id
-			      AND u.tipo_hemocomponente_id = th.id
-			      AND ($1 = 0 OR u.institucion_id = $1)
-			GROUP BY ts.id, th.id
-		) c WHERE c.cantidad <= c.minimo
-	`, instID).Scan(&nivCriticos)
+	// 5. Niveles críticos — definición ÚNICA (ver celdasCriticas en
+	// solicitudes.go): combinaciones DISTINTAS (8 tipos × 4 columnas = 32
+	// máximo) con disponibles <= mínimo, el mismo conteo que la página
+	// de Stock (bajo mínimo + sin existencias). Antes esta consulta
+	// cruzaba tipos_sangre × tipos_hemocomponente (5 filas, "Paquete
+	// globular" aparte del concentrado) y llegaba a 39, imposible
+	// sobre el máximo real de 32. Para admin general (instID 0) el
+	// conteo es GLOBAL (toda la red junta, no por institución): una
+	// combinación cuenta como crítica si el total de la red está por
+	// debajo de su mínimo.
+	_, bajoMinimo, sinExistencias, err := celdasCriticas(instID)
 	if err != nil {
-		log.Printf("Aviso: umbrales_stock no configurado: %v", err)
+		log.Printf("Aviso: no se pudo calcular niveles críticos: %v", err)
 		nivCriticos = 0
+	} else {
+		nivCriticos = bajoMinimo + sinExistencias
 	}
 
 	// Responder con el JSON estructurado
@@ -381,41 +366,17 @@ func GetStockPorTipo(w http.ResponseWriter, r *http.Request) {
 
 	instID := institucionParaConsulta(r)
 
-	// Crítico con el MISMO criterio que el KPI "Niveles críticos" de
-	// GetDashboardStats: por cada combinación (tipo sanguíneo ×
-	// hemocomponente) se compara el disponible con su mínimo de
-	// umbrales_stock (5 por defecto, igual que GetStock, si no hay fila
-	// de umbral para esa combinación). Un tipo es crítico si ALGUNA de
-	// sus combinaciones está por debajo de su mínimo. Así, una barra
-	// roja en la gráfica implica al menos una combinación contada en el
-	// KPI (cuando esa combinación tiene su umbral configurado).
-	rows, err := database.DB.Query(`
-        SELECT ts.grupo_abo || ts.factor_rh AS tipo,
-               th.id AS hemo_id,
-               COUNT(h.id) AS cantidad,
-               COALESCE(MIN(u.stock_minimo), 5) AS minimo
-        FROM tipos_sangre ts
-        CROSS JOIN tipos_hemocomponente th
-        LEFT JOIN hemocomponentes h
-               ON h.tipo_sangre_id = ts.id
-              AND h.tipo_hemocomponente_id = th.id
-              AND ($1 = 0 OR h.institucion_id = $1)
-              AND EXISTS (SELECT 1 FROM estados_hemocomponente eh
-                           WHERE eh.id = h.estado_id
-                             AND eh.nombre ILIKE 'disponible')
-        LEFT JOIN umbrales_stock u
-               ON u.tipo_sangre_id = ts.id
-              AND u.tipo_hemocomponente_id = th.id
-              AND ($1 = 0 OR u.institucion_id = $1)
-        GROUP BY ts.grupo_abo, ts.factor_rh, th.id
-        ORDER BY tipo, th.id;
-    `, instID)
+	// Crítico con la definición ÚNICA (celdasCriticas en solicitudes.go):
+	// por cada combinación (tipo sanguíneo × columna de la matriz, 32 en
+	// total) se compara el disponible con su mínimo; un tipo es crítico
+	// si ALGUNA de sus 4 combinaciones está por debajo de su mínimo
+	// (incluidas las sin existencias). Así, una barra roja en la gráfica
+	// implica al menos una combinación contada en el KPI del Dashboard.
+	celdas, _, _, err := celdasCriticas(instID)
 	if err != nil {
 		http.Error(w, "Error al consultar stock por tipo", http.StatusInternalServerError)
 		return
 	}
-	// Colocamos el defer inmediatamente después de comprobar que no hubo error en la consulta
-	defer rows.Close()
 
 	type StockTipo struct {
 		Tipo      string `json:"tipo"`
@@ -423,33 +384,22 @@ func GetStockPorTipo(w http.ResponseWriter, r *http.Request) {
 		EsCritico bool   `json:"esCritico"`
 	}
 
-	var stockList []StockTipo
-	// Agregado por tipo: la cantidad es la suma de sus combinaciones y
+	// Agregado por tipo: la cantidad es la suma de sus 4 combinaciones y
 	// es crítico si alguna combinación está por debajo de su mínimo.
-	indicePorTipo := map[string]int{}
-	for rows.Next() {
-		var tipo string
-		var hemoID, cantidad, minimo int
-		if err := rows.Scan(&tipo, &hemoID, &cantidad, &minimo); err != nil {
-			continue
+	stockList := []StockTipo{}
+	for _, tipo := range ordenTiposSangre {
+		st := StockTipo{Tipo: tipo}
+		for _, c := range celdas {
+			if c.Tipo != tipo {
+				continue
+			}
+			st.Cantidad += c.Cant
+			// Mismo comparador que el KPI (disponible <= mínimo).
+			if c.Estado != "normal" {
+				st.EsCritico = true
+			}
 		}
-		idx, ok := indicePorTipo[tipo]
-		if !ok {
-			stockList = append(stockList, StockTipo{Tipo: tipo})
-			idx = len(stockList) - 1
-			indicePorTipo[tipo] = idx
-		}
-		stockList[idx].Cantidad += cantidad
-		// Mismo comparador que el KPI (disponible <= mínimo).
-		if cantidad <= minimo {
-			stockList[idx].EsCritico = true
-		}
-	}
-
-	// Verificamos si hubo algún error al finalizar el recorrido de las filas (soluciona la advertencia)
-	if err = rows.Err(); err != nil {
-		http.Error(w, "Error al procesar los resultados de stock", http.StatusInternalServerError)
-		return
+		stockList = append(stockList, st)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -508,6 +458,80 @@ func GetSolicitudesRecientes(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(solicitudes)
+}
+
+// GetActividadReciente atiende GET /api/dashboard/actividad y alimenta la
+// tabla "Actividad reciente" del Dashboard.
+// Antes esa tabla estaba cableada a un estado vacío (useState([])) y nunca
+// mostraba nada. La tabla auditoria_logs existe en el esquema pero NUNCA
+// se escribe (ningún handler hace INSERT en ella), así que la actividad
+// se construye de lo que sí existe: unidades registradas (hemocomponentes)
+// y solicitudes (solicitudes_emergencia), ordenadas por fecha DESC.
+// hemocomponentes no guarda quién registró la unidad, así que el
+// responsable de una unidad es su institución. El ámbito es el mismo
+// que el resto del Dashboard (institucionParaConsulta).
+type actividadReciente struct {
+	Folio       string `json:"folio"`
+	Operacion   string `json:"operacion"`
+	Responsable string `json:"responsable"`
+	FechaHora   string `json:"fechaHora"`
+}
+
+func GetActividadReciente(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
+	instID := institucionParaConsulta(r)
+	if instID == -1 {
+		writeJSON(w, http.StatusOK, []actividadReciente{})
+		return
+	}
+	rows, err := database.DB.Query(`
+		SELECT folio, operacion, responsable, fecha_hora FROM (
+			SELECT h.codigo_unidad AS folio,
+			       'Unidad registrada · ' || ts.grupo_abo || ts.factor_rh || ' · ' || th.componente AS operacion,
+			       i.nombre AS responsable,
+			       TO_CHAR(h.fecha_extraccion::timestamp, 'DD Mon YYYY') AS fecha_hora,
+			       h.fecha_extraccion::timestamp AS fecha_ord
+			FROM hemocomponentes h
+			JOIN tipos_sangre ts ON ts.id = h.tipo_sangre_id
+			JOIN tipos_hemocomponente th ON th.id = h.tipo_hemocomponente_id
+			JOIN instituciones i ON i.id = h.institucion_id
+			WHERE ($1 = 0 OR h.institucion_id = $1)
+			UNION ALL
+			SELECT 'SOL-' || LPAD(s.id::text, 4, '0') AS folio,
+			       'Solicitud registrada · ' || STRING_AGG(DISTINCT ts.grupo_abo || ts.factor_rh || ' · ' || th.componente, ', ') AS operacion,
+			       u.nombre AS responsable,
+			       TO_CHAR(s.fecha_solicitud, 'DD Mon · HH24:MI') AS fecha_hora,
+			       s.fecha_solicitud AS fecha_ord
+			FROM solicitudes_emergencia s
+			JOIN solicitud_detalles sd ON sd.solicitud_id = s.id
+			JOIN tipos_sangre ts ON ts.id = sd.tipo_sangre_id
+			JOIN tipos_hemocomponente th ON th.id = sd.tipo_hemocomponente_id
+			JOIN usuarios u ON u.id = s.usuario_solicitante_id
+			WHERE ($1 = 0 OR s.institucion_solicitante_id = $1)
+			GROUP BY s.id, u.nombre, s.fecha_solicitud
+		) a
+		ORDER BY fecha_ord DESC
+		LIMIT 8
+	`, instID)
+	if err != nil {
+		log.Printf("Error al consultar actividad reciente: %v", err)
+		http.Error(w, "Error al obtener actividad reciente", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	actividad := []actividadReciente{}
+	for rows.Next() {
+		var a actividadReciente
+		if err := rows.Scan(&a.Folio, &a.Operacion, &a.Responsable, &a.FechaHora); err != nil {
+			continue
+		}
+		actividad = append(actividad, a)
+	}
+	writeJSON(w, http.StatusOK, actividad)
 }
 
 // RegistrarUnidad atiende la ruta POST /api/unidades
@@ -581,6 +605,36 @@ func RegistrarUnidad(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		institucionID = *sesion.InstitucionID
+	}
+
+	// Validación de fechas (punto 3a del QA): antes las fechas iban
+	// directo al INSERT sin validar, y la BD tiene unidades con
+	// extracción futura y caducidad anterior a la extracción (UN-20356,
+	// UN-20355). Reglas: la extracción no puede ser futura, la
+	// caducidad debe ser posterior a la extracción y no puede estar ya
+	// vencida al registrar (caducar hoy sí se permite).
+	fechaExtraccion, err := time.Parse("2006-01-02", strings.TrimSpace(input.FechaExtraccion))
+	if err != nil {
+		http.Error(w, "La fecha de extracción no es válida (usa el formato AAAA-MM-DD).", http.StatusBadRequest)
+		return
+	}
+	fechaCaducidad, err := time.Parse("2006-01-02", strings.TrimSpace(input.FechaCaducidad))
+	if err != nil {
+		http.Error(w, "La fecha de caducidad no es válida (usa el formato AAAA-MM-DD).", http.StatusBadRequest)
+		return
+	}
+	hoy := time.Now().Truncate(24 * time.Hour)
+	if fechaExtraccion.After(hoy) {
+		http.Error(w, "La fecha de extracción no puede ser futura.", http.StatusBadRequest)
+		return
+	}
+	if !fechaCaducidad.After(fechaExtraccion) {
+		http.Error(w, "La fecha de caducidad debe ser posterior a la fecha de extracción.", http.StatusBadRequest)
+		return
+	}
+	if fechaCaducidad.Before(hoy) {
+		http.Error(w, "La fecha de caducidad ya está vencida.", http.StatusBadRequest)
+		return
 	}
 
 	// 1. Obtener el ID del tipo de sangre (separando grupo ABO y factor Rh)

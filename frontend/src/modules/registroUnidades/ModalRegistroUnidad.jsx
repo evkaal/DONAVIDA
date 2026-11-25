@@ -63,6 +63,21 @@ const sumarDiasISO = (iso, dias) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+// Validación de fechas (punto 3a del QA): las mismas reglas que el
+// backend (RegistrarUnidad). Las fechas son YYYY-MM-DD, así que la
+// comparación de texto es la comparación cronológica. Antes el modal no
+// validaba nada y el backend tampoco, y la BD tiene unidades con
+// extracción futura y caducidad anterior a la extracción.
+const validarFechasUnidad = (extraccion, caducidad) => {
+  const hoy = hoyISO();
+  if (!extraccion) return 'La fecha de extracción es obligatoria.';
+  if (!caducidad) return 'La fecha de caducidad es obligatoria.';
+  if (extraccion > hoy) return 'La fecha de extracción no puede ser futura.';
+  if (caducidad <= extraccion) return 'La fecha de caducidad debe ser posterior a la fecha de extracción.';
+  if (caducidad < hoy) return 'La fecha de caducidad ya está vencida.';
+  return '';
+};
+
 export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, usuario }) {
   // 1. Estados locales del formulario
   // La institución es la de la sesión; si el usuario no tiene, se muestra
@@ -76,6 +91,8 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
   const [fechaCaducidad, setFechaCaducidad] = useState(() => sumarDiasISO(hoyISO(), 42));
   const [cargando, setCargando] = useState(false);
   const [mensajeExito, setMensajeExito] = useState('');
+  // Error de validación de fechas (se muestra bajo los campos de fecha).
+  const [errorFechas, setErrorFechas] = useState('');
   // Aviso sencillo (modal) en lugar de alert() del navegador.
   const [aviso, setAviso] = useState(null);
 
@@ -94,6 +111,7 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
       setFechaExtraccion(hoy);
       setFechaCaducidad(sumarDiasISO(hoy, vigenciaDias));
       setMensajeExito('');
+      setErrorFechas('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -167,6 +185,14 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
       setAviso({ titulo: 'Sin institución', mensaje: 'Tu usuario no tiene institución asignada. Pide al administrador general que te asigne una institución.' });
       return;
     }
+    // Validación de fechas (misma que el backend): sin esto se podían
+    // registrar unidades con extracción futura o caducidad vencida.
+    const errorFechasValidacion = validarFechasUnidad(fechaExtraccion, fechaCaducidad);
+    if (errorFechasValidacion) {
+      setErrorFechas(errorFechasValidacion);
+      return;
+    }
+    setErrorFechas('');
     setCargando(true);
     setMensajeExito('');
 
@@ -398,7 +424,7 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
                     type="date"
                     className="mreg-u-input"
                     value={fechaExtraccion}
-                    onChange={(e) => setFechaExtraccion(e.target.value)}
+                    onChange={(e) => { setFechaExtraccion(e.target.value); setErrorFechas(''); }}
                     required
                   />
                 </div>
@@ -414,13 +440,20 @@ export default function ModalRegistroUnidad({ isOpen, onClose, onSaveSuccess, us
                     type="date"
                     className="mreg-u-input"
                     value={fechaCaducidad}
-                    onChange={(e) => setFechaCaducidad(e.target.value)}
+                    onChange={(e) => { setFechaCaducidad(e.target.value); setErrorFechas(''); }}
                     required
                   />
                 </div>
                 <span className="mreg-u-helper-text">Calculada con la vigencia; puedes ajustarla</span>
               </div>
             </div>
+
+            {/* Error de validación de fechas (bajo los campos de fecha) */}
+            {errorFechas && (
+              <div role="alert" style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', borderRadius: '8px', padding: '10px 14px', marginBottom: '12px' }}>
+                {errorFechas}
+              </div>
+            )}
           </div>
 
           <footer className="mreg-u-footer">

@@ -39,9 +39,37 @@ export const obtenerUsuarios = async () => {
   }
 };
 
-export const eliminarUsuarioService = async (id) => {
+export const eliminarUuarioService = async (id) => {
   const response = await api.delete(`/usuarios/${id}`);
   return response.data;
+};
+
+// Eliminar una institución (solo admin general, rol_id 1). El backend
+// responde 409 con el detalle si la institución tiene dependencias
+// (usuarios, unidades o solicitudes) y no se puede borrar.
+export const eliminarInstitucion = async (id) => {
+  const response = await api.delete(`/instituciones/${id}`);
+  return response.data;
+};
+
+// Nombres legibles para los códigos internos de rol que devuelve el
+// backend (roles.nombre: admin_general, admin_institucion,
+// personal_medico). Un código desconocido se embellece ("mi_codigo" ->
+// "Mi codigo") en vez de mostrarse tal cual. Incluye los roles de la
+// app móvil por si ya existen en la BD.
+const NOMBRES_ROL = {
+  admin_general: "Administrador general",
+  admin_institucion: "Administrador de institución",
+  personal_medico: "Personal médico",
+  donante: "Donante",
+  admin_movil: "Administrador de la app móvil",
+};
+
+export const nombreRolLegible = (codigo) => {
+  if (!codigo) return "Sin rol";
+  if (NOMBRES_ROL[codigo]) return NOMBRES_ROL[codigo];
+  const texto = String(codigo).replace(/_/g, " ").trim();
+  return texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : "Sin rol";
 };
 
 // Dar de baja (estado=false) o reactivar (estado=true) un usuario.

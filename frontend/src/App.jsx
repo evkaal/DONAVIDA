@@ -7,20 +7,25 @@ import StockInventario from './modules/stockInventario/StockInventario';
 import Historico from './modules/historico';
 import SolicitudUnidades from './modules/solicitudUnidades';
 import SolicitudesEntrantes from './modules/solicitudesEntrantes';
+import { obtenerUsuarioSesion, limpiarSesion } from './services/sesionService';
 
 
 function App() {
-  // Estado para el usuario autenticado
-  const [usuario, setUsuario] = useState(null);
+  // Estado para el usuario autenticado. Se inicializa desde la sesión
+  // guardada (localStorage si se marcó "Mantener sesión iniciada",
+  // sessionStorage si no), así la sesión sobrevive a recargar la página.
+  // Antes siempre arrancaba en null y al recargar aparecía el Login
+  // aunque hubiera token guardado.
+  const [usuario, setUsuario] = useState(() => {
+    const sesion = obtenerUsuarioSesion();
+    return sesion && sesion.email ? sesion : null;
+  });
 
   // Estado para el módulo activo a nivel de aplicación
   const [moduloApp, setModuloApp] = useState('dashboard');
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('usuario');
-    localStorage.removeItem('rol_id');
-    localStorage.removeItem('institucion_id');
+    limpiarSesion();
     setUsuario(null);
     setModuloApp('dashboard');
   };

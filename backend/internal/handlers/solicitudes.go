@@ -312,6 +312,166 @@ func GetUnidades(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------------------------------------------------------------------------
+// Definición ÚNICA de "nivel crítico" de stock (Dashboard, Stock y gráfica).
+// ---------------------------------------------------------------------------
+// El dominio son 32 celdas: 8 tipos de sangre × 4 columnas de la matriz
+// (Sangre total, Concentrado eritrocitario, Plasma fresco, Plaquetas).
+// "Paquete globular" es el mismo producto que el concentrado eritrocitario,
+// así que sus unidades se suman en la misma columna (ver columnaHemo).
+// Antes el KPI del Dashboard contaba 8 × 5 tipos de hemocomponente (40
+// combinaciones) y llegaba a 39, imposible sobre el máximo real de 32.
+//
+// Para cada celda: cant = unidades Disponibles del ámbito; min = mínimo de
+// umbrales_stock para esa combinación (5 por defecto si no hay fila; si la
+// columna agrupa dos tipos de hemocomponente se toma el menor mínimo de
+// ambos). Estados: "sin_existencia" (cant == 0), "bajo" (0 < cant <= min),
+// "normal" (cant > min). "Crítico" = bajo + sin existencias.
+// El ámbito es el mismo en los tres sitios (institucionParaConsulta):
+// admin general (instID 0) ve toda la red; rol 2/3 solo su institución.
+// Sin institución (instID -1) no se cuenta nada: los conteos quedan en 0,
+// igual que el resto de KPIs del Dashboard para ese caso.
+type celdaCritica struct {
+	Tipo   string
+	Col    string // sangreTotal | concEritrocitario | plasmaFresco | plaquetas
+	Cant   int
+	Min    int
+	Estado string // "normal" | "bajo" | "sin_existencia"
+}
+
+var columnasStock = []string{"sangreTotal", "concEritrocitario", "plasmaFresco", "plaquetas"}
+
+// celdasCriticas calcula las 32 celdas de stock para el ámbito dado.
+// Devuelve las celdas en orden fijo (tipo, columna) y los conteos
+// bajoMinimo (0 < cant <= min) y sinExistencias (cant == 0).
+func celdasCriticas(instID int) ([]celdaCritica, int, int, error) {
+	celdas := map[string]*celdaCritica{}
+	for _, tipo := range ordenTiposSangre {
+		for _, col := range columnasStock {
+			celdas[tipo+":"+col] = &celdaCritica{Tipo: tipo, Col: col, Min: 5, Estado: "sin_existencia"}
+		}
+	}
+	// Sin institución no hay ámbito que contar: las 32 celdas quedan en 0
+	// y los conteos en 0 (coherente con el resto de KPIs).
+	if instID == -1 {
+		resultado := []celdaCritica{}
+		for _, tipo := range ordenTiposSangre {
+			for _, col := range columnasStock {
+				resultado = append(resultado, *celdas[tipo+":"+col])
+			}
+		}
+		return resultado, 0, 0, nil
+	}
+
+	// 1. Tipos de sangre (id por nombre) para resolver umbrales.
+	tipoIDs := map[string]int{}
+	trows, err := database.DB.Query(`SELECT id, grupo_abo || factor_rh AS tipo FROM tipos_sangre`)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	for trows.Next() {
+		var id int
+		var tipo string
+		if err := trows.Scan(&id, &tipo); err == nil {
+			tipoIDs[tipo] = id
+		}
+	}
+	trows.Close()
+
+	// 2. Umbrales: si hay institución, los suyos; si no, el mínimo entre
+	// todas las instituciones para esa celda (5 por defecto si no hay fila).
+	umbrales := map[string]int{} // "tipoID:hemoID" -> min
+	urows, err := database.DB.Query(`
+		SELECT tipo_sangre_id, tipo_hemocomponente_id, MIN(stock_minimo)
+		FROM umbrales_stock
+		WHERE ($1 = 0 OR institucion_id = $1)
+		GROUP BY tipo_sangre_id, tipo_hemocomponente_id
+	`, instID)
+	if err == nil {
+		for urows.Next() {
+			var tsID, thID, min int
+			if err := urows.Scan(&tsID, &thID, &min); err == nil {
+				umbrales[fmt.Sprintf("%d:%d", tsID, thID)] = min
+			}
+		}
+		urows.Close()
+	}
+	minFijado := map[string]bool{} // "tipo:columna" -> ya se tomó un umbral
+
+	// 3. Conteo de unidades disponibles por (tipo_sangre, hemocomponente),
+	// sumando en la columna de la matriz (columnaHemo).
+	crows, err := database.DB.Query(`
+		SELECT ts.grupo_abo || ts.factor_rh AS tipo, th.id AS hemo_id, th.componente,
+		       COUNT(h.id) AS cantidad
+		FROM tipos_sangre ts
+		CROSS JOIN tipos_hemocomponente th
+		LEFT JOIN hemocomponentes h
+		  ON h.tipo_sangre_id = ts.id
+		 AND h.tipo_hemocomponente_id = th.id
+		 AND ($1 = 0 OR h.institucion_id = $1)
+		 AND EXISTS (SELECT 1 FROM estados_hemocomponente eh WHERE eh.id = h.estado_id AND eh.nombre ILIKE 'disponible')
+		GROUP BY ts.grupo_abo, ts.factor_rh, th.id, th.componente
+	`, instID)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	defer crows.Close()
+	for crows.Next() {
+		var tipo string
+		var hemoID, cantidad int
+		var componente string
+		if err := crows.Scan(&tipo, &hemoID, &componente, &cantidad); err != nil {
+			continue
+		}
+		col := columnaHemo(componente)
+		if col == "" {
+			continue
+		}
+		celda, ok := celdas[tipo+":"+col]
+		if !ok {
+			continue
+		}
+		celda.Cant += cantidad
+		// Mínimo de la celda: el menor entre las filas de umbral de los
+		// tipos de hemocomponente que caen en esta columna (si alguno
+		// tiene fila; si ninguno, queda el 5 por defecto).
+		if tsID, ok := tipoIDs[tipo]; ok {
+			clave := fmt.Sprintf("%d:%d", tsID, hemoID)
+			if m, ok2 := umbrales[clave]; ok2 {
+				claveCelda := tipo + ":" + col
+				if !minFijado[claveCelda] || m < celda.Min {
+					celda.Min = m
+					minFijado[claveCelda] = true
+				}
+			}
+		}
+	}
+	if err := crows.Err(); err != nil {
+		return nil, 0, 0, err
+	}
+
+	// 4. Estados y conteos, en orden fijo.
+	resultado := []celdaCritica{}
+	var bajo, sinExistencias int
+	for _, tipo := range ordenTiposSangre {
+		for _, col := range columnasStock {
+			celda := celdas[tipo+":"+col]
+			switch {
+			case celda.Cant == 0:
+				celda.Estado = "sin_existencia"
+				sinExistencias++
+			case celda.Cant <= celda.Min:
+				celda.Estado = "bajo"
+				bajo++
+			default:
+				celda.Estado = "normal"
+			}
+			resultado = append(resultado, *celda)
+		}
+	}
+	return resultado, bajo, sinExistencias, nil
+}
+
+// ---------------------------------------------------------------------------
 // GET /api/stock?institucion_id=
 // ---------------------------------------------------------------------------
 
@@ -418,82 +578,25 @@ func GetStock(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error al contar unidades disponibles: %v", err)
 	}
 
-	// 1. Tipos de sangre (orden fijo A+, A-, B+, B-, AB+, AB-, O+, O-)
-	tipoIDs := map[string]int{}
-	rows, err := database.DB.Query(`SELECT id, grupo_abo || factor_rh AS tipo FROM tipos_sangre`)
-	if err != nil {
-		http.Error(w, "Error al consultar tipos de sangre", http.StatusInternalServerError)
-		return
-	}
-	for rows.Next() {
-		var id int
-		var tipo string
-		if err := rows.Scan(&id, &tipo); err == nil {
-			tipoIDs[tipo] = id
-		}
-	}
-	rows.Close()
-
-	// 2. Umbrales: si hay institución, los suyos; si no, el mínimo entre todas
-	// las instituciones para esa celda (5 por defecto si no hay registro).
-	umbrales := map[string]int{} // "tipoID:hemoID" -> min
-	urows, err := database.DB.Query(`
-		SELECT tipo_sangre_id, tipo_hemocomponente_id, MIN(stock_minimo)
-		FROM umbrales_stock
-		WHERE ($1 = 0 OR institucion_id = $1)
-		GROUP BY tipo_sangre_id, tipo_hemocomponente_id
-	`, instID)
-	if err == nil {
-		for urows.Next() {
-			var tsID, thID, min int
-			if err := urows.Scan(&tsID, &thID, &min); err == nil {
-				umbrales[fmt.Sprintf("%d:%d", tsID, thID)] = min
-			}
-		}
-		urows.Close()
-	}
-
-	// 3. Conteo de unidades disponibles por (tipo_sangre, hemocomponente).
-	conteos := map[string]int{} // "tipo:claveColumna" -> cantidad
-	hemoIDs := map[string]int{} // claveColumna -> un id de hemocomponente (para el umbral)
-	crows, err := database.DB.Query(`
-		SELECT ts.grupo_abo || ts.factor_rh AS tipo, th.id AS hemo_id, th.componente,
-		       COUNT(h.id) AS cantidad
-		FROM tipos_sangre ts
-		CROSS JOIN tipos_hemocomponente th
-		LEFT JOIN hemocomponentes h
-		  ON h.tipo_sangre_id = ts.id
-		 AND h.tipo_hemocomponente_id = th.id
-		 AND ($1 = 0 OR h.institucion_id = $1)
-		 AND EXISTS (SELECT 1 FROM estados_hemocomponente eh WHERE eh.id = h.estado_id AND eh.nombre ILIKE 'disponible')
-		GROUP BY ts.grupo_abo, ts.factor_rh, th.id, th.componente
-	`, instID)
+	// 1-4. Matriz 8 x 4 + KPIs + alertas, con la definición ÚNICA de
+	// celdasCriticas (la misma que el KPI del Dashboard y la gráfica):
+	// 32 combinaciones distintas, "Paquete globular" sumado en la
+	// columna de concentrado eritrocitario.
+	celdasCrit, bajoMinimo, sinExistencias, err := celdasCriticas(instID)
 	if err != nil {
 		log.Printf("Error al consultar stock: %v", err)
 		http.Error(w, "Error al obtener stock", http.StatusInternalServerError)
 		return
 	}
-	for crows.Next() {
-		var tipo string
-		var hemoID, cantidad int
-		var componente string
-		if err := crows.Scan(&tipo, &hemoID, &componente, &cantidad); err != nil {
-			continue
-		}
-		col := columnaHemo(componente)
-		if col == "" {
-			continue
-		}
-		conteos[tipo+":"+col] += cantidad
-		hemoIDs[tipo+":"+col] = hemoID
+	celdaPorClave := map[string]celdaCritica{}
+	for _, c := range celdasCrit {
+		celdaPorClave[c.Tipo+":"+c.Col] = c
 	}
-	crows.Close()
 
 	// 4. Matriz 8 x 4 + KPIs + alertas de stock.
 	matriz := []filaMatriz{}
 	totales := map[string]int{"sangreTotal": 0, "concEritrocitario": 0, "plasmaFresco": 0, "plaquetas": 0, "granTotal": 0}
-	cols := []string{"sangreTotal", "concEritrocitario", "plasmaFresco", "plaquetas"}
-	var tiposConExistencia, bajoMinimo, sinExistencias int
+	var tiposConExistencia int
 	var detalleSin []string
 	alertas := []alertaStock{}
 	alertaID := 1
@@ -506,42 +609,25 @@ func GetStock(w http.ResponseWriter, r *http.Request) {
 			"plasmaFresco":      &fila.PlasmaFresco,
 			"plaquetas":         &fila.Plaquetas,
 		}
-		for _, col := range cols {
-			cant := conteos[tipo+":"+col]
-			min := 5
-			if tsID, ok := tipoIDs[tipo]; ok {
-				if hemoID, ok2 := hemoIDs[tipo+":"+col]; ok2 {
-					if m, ok3 := umbrales[fmt.Sprintf("%d:%d", tsID, hemoID)]; ok3 {
-						min = m
-					}
-				}
-			}
-			estado := "normal"
-			switch {
-			case cant == 0:
-				estado = "sin_existencia"
-			case cant <= min:
-				estado = "bajo"
-			}
-			*celdas[col] = celdaStock{Cant: cant, Min: min, Estado: estado}
-			fila.Total += cant
-			totales[col] += cant
-			totales["granTotal"] += cant
-			if cant > 0 {
+		for _, col := range columnasStock {
+			c := celdaPorClave[tipo+":"+col]
+			*celdas[col] = celdaStock{Cant: c.Cant, Min: c.Min, Estado: c.Estado}
+			fila.Total += c.Cant
+			totales[col] += c.Cant
+			totales["granTotal"] += c.Cant
+			if c.Cant > 0 {
 				tiposConStock[tipo] = true
 			}
-			if estado == "bajo" {
-				bajoMinimo++
+			if c.Estado == "bajo" {
 				alertas = append(alertas, alertaStock{
 					ID: alertaID, TipoAlerta: "advertencia",
 					Titulo:      fmt.Sprintf("%s · %s bajo el mínimo", tipo, nombreColumna(col)),
-					Descripcion: fmt.Sprintf("Quedan %d unidades (mínimo %d).", cant, min),
+					Descripcion: fmt.Sprintf("Quedan %d unidades (mínimo %d).", c.Cant, c.Min),
 					Tiempo:      "Ahora",
 				})
 				alertaID++
 			}
-			if estado == "sin_existencia" {
-				sinExistencias++
+			if c.Estado == "sin_existencia" {
 				detalleSin = append(detalleSin, fmt.Sprintf("%s · %s", tipo, nombreColumna(col)))
 				alertas = append(alertas, alertaStock{
 					ID: alertaID, TipoAlerta: "critica",
@@ -593,13 +679,11 @@ func GetStock(w http.ResponseWriter, r *http.Request) {
 				u.VigenciaRestante = fmt.Sprintf("%d días", dias)
 			}
 			proximas = append(proximas, u)
-			alertas = append(alertas, alertaStock{
-				ID: alertaID, TipoAlerta: "caducidad",
-				Titulo:      fmt.Sprintf("Unidad %s por caducar", u.Codigo),
-				Descripcion: fmt.Sprintf("%s · %s caduca el %s.", u.Tipo, u.Hemocomponente, u.FechaCaducidad),
-				Tiempo:      u.VigenciaRestante,
-			})
-			alertaID++
+			// NOTA: las unidades por caducar NO se suman a `alertas`: esa
+			// lista es solo nivel de stock (bajo mínimo + sin existencias),
+			// para que su conteo coincida con bajoMinimo + sinExistencias
+			// y con el KPI del Dashboard. Las próximas a caducar se ven
+			// en su propia sección (proximasCaducar).
 		}
 		prows.Close()
 	}
@@ -609,7 +693,7 @@ func GetStock(w http.ResponseWriter, r *http.Request) {
 			"unidadesDisponibles":   totalDisponibles,
 			"tiposConExistencia":    tiposConExistencia,
 			"bajoMinimo":            bajoMinimo,
-			"totalCombinaciones":    len(ordenTiposSangre) * len(cols),
+			"totalCombinaciones":    len(ordenTiposSangre) * len(columnasStock),
 			"sinExistencias":        sinExistencias,
 			"detalleSinExistencias": detalleSinExistencias,
 			"porCaducar":            len(proximas),

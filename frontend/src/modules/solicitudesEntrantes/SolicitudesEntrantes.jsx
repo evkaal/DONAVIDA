@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { obtenerUsuarioSesion } from '../../services/sesionService';
 import './SolicitudesEntrantes.css';
 import { Sidebar, Navbar } from '../../components/layout';
 import ModalAviso from '../../components/common/ModalAviso';
@@ -17,7 +18,7 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
   const [aviso, setAviso] = useState(null);
   const [confirmacion, setConfirmacion] = useState(null); // { mensaje, onAceptar }
 
-  const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
+  const usuarioSesion = usuario || obtenerUsuarioSesion();
   // La institución es solo la de la sesión. Sin fallback: un usuario sin
   // institución no ve entrantes de nadie, ve el aviso.
   const institucionIdSesion = usuarioSesion?.institucion_id ?? null;
@@ -26,6 +27,23 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
   // entrantes. El personal médico (rol_id 3) las ve en solo lectura.
   const puedeResponder = Number(usuarioSesion?.rol_id) === 2;
   const sinInstitucion = !esAdminGeneral && !institucionIdSesion;
+
+  // Estado PARA EL TABLERO (lo que ve esta institución): el rechazo
+  // automático es por institución — la solicitud sigue Pendiente en
+  // global (para las demás instituciones), pero para la institución
+  // que la ve ya está rechazada. Por eso las pestañas y sus contadores
+  // usan este estado derivado y no x.estado directamente (punto 6 del
+  // QA: una solicitud con "Rechazo automático" aparecía en
+  // "Pendientes (1)" y "Rechazadas" marcaba 0).
+  const estadoParaTablero = (item) =>
+    item.estado === 'pendiente' && item.rechazoAutomatico ? 'rechazada' : item.estado;
+
+  const calcularConteos = (lista) => ({
+    pendientes: lista.filter((x) => estadoParaTablero(x) === 'pendiente').length,
+    aceptadas: lista.filter((x) => estadoParaTablero(x) === 'aceptada').length,
+    rechazadas: lista.filter((x) => estadoParaTablero(x) === 'rechazada').length,
+    todas: lista.length,
+  });
 
   const cargarEntrantes = async () => {
     if (sinInstitucion) {
@@ -38,12 +56,7 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
       const data = await obtenerSolicitudesEntrantes(institucionIdSesion);
       const lista = Array.isArray(data) ? data : [];
       setSolicitudes(lista);
-      setConteos({
-        pendientes: lista.filter((x) => x.estado === 'pendiente').length,
-        aceptadas: lista.filter((x) => x.estado === 'aceptada').length,
-        rechazadas: lista.filter((x) => x.estado === 'rechazada').length,
-        todas: lista.length,
-      });
+      setConteos(calcularConteos(lista));
     } catch (err) {
       console.error("Error al cargar solicitudes entrantes:", err);
       setErrorCarga(err?.response?.data || err?.message || 'No se pudieron cargar las solicitudes entrantes.');
@@ -63,10 +76,11 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
   });
 
   const solicitudesFiltradas = solicitudes.filter((item) => {
-    // Filtro por pestaña
-    if (tabActiva === 'pendientes' && item.estado !== 'pendiente') return false;
-    if (tabActiva === 'aceptadas' && item.estado !== 'aceptada') return false;
-    if (tabActiva === 'rechazadas' && item.estado !== 'rechazada') return false;
+    // Filtro por pestaña (con el estado derivado: el rechazo automático
+    // cuenta en "Rechazadas", no en "Pendientes").
+    if (tabActiva === 'pendientes' && estadoParaTablero(item) !== 'pendiente') return false;
+    if (tabActiva === 'aceptadas' && estadoParaTablero(item) !== 'aceptada') return false;
+    if (tabActiva === 'rechazadas' && estadoParaTablero(item) !== 'rechazada') return false;
 
     // Filtro por texto (ID o Institución)
     if (busqueda.trim() !== '') {
@@ -85,12 +99,7 @@ export default function SolicitudesEntrantes({ usuario, onCambiarModulo, onLogou
     );
     setConteos((prev) => {
       const lista = solicitudes.map((s) => (s.id === id ? { ...s, estado, ...extra } : s));
-      return {
-        pendientes: lista.filter((x) => x.estado === 'pendiente').length,
-        aceptadas: lista.filter((x) => x.estado === 'aceptada').length,
-        rechazadas: lista.filter((x) => x.estado === 'rechazada').length,
-        todas: lista.length,
-      };
+      return calcularConteos(lista);
     });
     if (solicitudSeleccionada?.id === id) {
       setSolicitudSeleccionada((prev) => (prev ? { ...prev, estado, ...extra } : null));

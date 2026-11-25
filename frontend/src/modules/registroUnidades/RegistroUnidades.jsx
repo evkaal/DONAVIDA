@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { obtenerUsuarioSesion } from '../../services/sesionService';
 import './RegistroUnidades.css';
 import ModalRegistroUnidad from './ModalRegistroUnidad';
 import ModalRegistrarSalida from './ModalRegistrarSalida';
 import ModalAviso from '../../components/common/ModalAviso';
-import { Sidebar } from '../../components/layout';
+import { Sidebar, Navbar } from '../../components/layout';
 import { getUnidades, registrarSalida } from '../../services/unidadesService';
 import { obtenerHemocomponentes, obtenerTiposSangre, normalizarHemocomponente } from '../../services/catalogosService';
 
@@ -42,7 +43,7 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
     return () => { cancelado = true; };
   }, []);
 
-  const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
+  const usuarioSesion = usuario || obtenerUsuarioSesion();
   // La institución es solo la de la sesión (del JWT/login). Sin fallback a
   // localStorage ni a otra institución: un usuario sin institución no ve
   // unidades de nadie, ve el aviso de "Sin institución asignada".
@@ -65,7 +66,10 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
         // "Paquete globular" se muestra como "Concentrado eritrocitario":
         // es el mismo producto (ver catalogosService).
         hemocomponente: normalizarHemocomponente(u.hemocomponente || ''),
-        fechaIngreso: u.fechaExtraccion || u.fechaIngreso || '',
+        // La columna real de la BD es fecha_extraccion: el término
+        // correcto es "Fecha de extracción" (el formulario ya lo dice
+        // así; la tabla decía "FECHA DE INGRESO").
+        fechaExtraccion: u.fechaExtraccion || u.fechaIngreso || '',
         caducidad: u.fechaCaducidad || u.caducidad || '',
         estado: u.estado || 'Disponible',
       })));
@@ -120,6 +124,9 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
       />
       {/* ÁREA PRINCIPAL */}
       <div className="dona-main-area" style={{ width: '100%', margin: 0 }}>
+        {/* Barra superior (buscador, campana, perfil): es el mismo Navbar
+            que usan los demás módulos; antes esta vista era la única sin él. */}
+        <Navbar usuario={usuario} />
         <main className="dona-content-body">
           <section className="reg-page-header">
             <div className="reg-title-wrapper">
@@ -207,7 +214,7 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
                     <th>FOLIO</th>
                     <th>TIPO</th>
                     <th>HEMOCOMPONENTE</th>
-                    <th>FECHA DE INGRESO</th>
+                    <th>FECHA DE EXTRACCIÓN</th>
                     <th>CADUCIDAD</th>
                     <th>ESTADO</th>
                     <th style={{ width: '120px' }}></th>
@@ -224,7 +231,7 @@ export default function RegistroUnidades({ usuario, onCambiarModulo, onLogout })
                           </span>
                         </td>
                         <td className="cell-hemo">{u.hemocomponente}</td>
-                        <td className="cell-date">{u.fechaIngreso}</td>
+                        <td className="cell-date">{u.fechaExtraccion}</td>
                         <td className="cell-date">{u.caducidad}</td>
                         <td>
                           <span className={`status-badge status-${u.estado?.toLowerCase().replace(/\s+/g, '-')}`}>

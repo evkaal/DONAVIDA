@@ -5,9 +5,12 @@ import {
   getDashboardStats,
   getStockPorTipo,
   getSolicitudesRecientes,
+  getActividadReciente,
   getAdminResumen,
 } from "../../services/dashboardService";
 import { obtenerStockInstitucion } from "../../services/stockService";
+import { eliminarInstitucion } from "../../services/usuariosService";
+import ModalAviso from "../../components/common/ModalAviso";
 
 // Dashboard es SOLO dashboard. El cambio de módulo lo resuelve App.jsx:
 // cada pantalla se renderiza desde ahí con su propio Sidebar/Navbar.
@@ -26,19 +29,57 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
   // Matriz de stock (GET /api/stock) para el desglose por hemocomponente.
   const [stockMatriz, setStockMatriz] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [actividadReciente] = useState([]);
+  // Actividad reciente real (GET /api/dashboard/actividad): unidades
+  // registradas y solicitudes recientes. Antes era un estado vacío fijo
+  // y la tabla nunca mostraba nada.
+  const [actividadReciente, setActividadReciente] = useState([]);
+  // Eliminar institución (solo admin general): confirmación y aviso.
+  const [confirmarEliminarInst, setConfirmarEliminarInst] = useState(null);
+  const [avisoAdmin, setAvisoAdmin] = useState(null);
 
   // Validación basada estrictamente en el rol_id devuelto por la base de datos y el JWT
   const esAdminGen = usuario?.rol_id === 1;
   const esAdmin = esAdminGen || usuario?.rol_id === 2;
+
+  // Resumen de admin (totales + instituciones): se recarga tras eliminar
+  // una institución para que la lista se actualice sin recargar la página.
+  const cargarResumenAdmin = async () => {
+    const resumen = await getAdminResumen();
+    if (resumen) setAdminResumen(resumen);
+  };
+
+  // Eliminar institución (solo la ve el admin general, que es el único
+  // que ve esta tarjeta). Si el backend responde 409 (tiene usuarios,
+  // unidades o solicitudes), se muestra el motivo tal cual.
+  const confirmarEliminarInstitucion = async () => {
+    if (!confirmarEliminarInst) return;
+    const inst = confirmarEliminarInst;
+    setConfirmarEliminarInst(null);
+    try {
+      await eliminarInstitucion(inst.id);
+      setAvisoAdmin({
+        titulo: "Institución eliminada",
+        mensaje: `La institución ${inst.nombre} se eliminó con éxito.`,
+      });
+      await cargarResumenAdmin();
+    } catch (err) {
+      const msg = err?.response?.data;
+      setAvisoAdmin({
+        titulo: "No se pudo eliminar",
+        mensaje:
+          typeof msg === "string" && msg
+            ? msg
+            : "No se pudo eliminar la institución.",
+      });
+    }
+  };
 
   useEffect(() => {
     const cargarDatosDashboard = async () => {
       try {
         if (esAdminGen) {
           // Vista de dueño/desarrollador: totales del sistema, no de una institución.
-          const resumen = await getAdminResumen();
-          if (resumen) setAdminResumen(resumen);
+          await cargarResumenAdmin();
         }
         const statsData = await getDashboardStats();
         if (statsData) setStats(statsData);
@@ -55,6 +96,9 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
 
         const solicitudesData = await getSolicitudesRecientes();
         setSolicitudesRecientes(solicitudesData || []);
+
+        const actividadData = await getActividadReciente();
+        setActividadReciente(actividadData || []);
       } catch (err) {
         console.error("Error al cargar los datos del dashboard:", err);
       } finally {
@@ -179,7 +223,7 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
               <>
                 {kpi("Stock total", "/assets/iconos_dash/sangre.png", "Stock total", stats.totalUnidades || 0, "Unidades en inventario", "badge-red-subtle")}
                 {kpi("Próximas a caducar", "/assets/iconos_dash/reloj.png", "Próximas a caducar", stats.proximasCaducar || 0, "Próximos 7 días", "badge-orange-subtle")}
-                {kpi("Tipos en nivel crítico", "/assets/iconos_dash/advertencia.png", "Tipos en nivel crítico", stats.nivelesCriticos || 0, "Combinaciones bajo el mínimo", "badge-crimson-subtle")}
+                {kpi("Combinaciones en nivel crítico", "/assets/iconos_dash/advertencia.png", "Combinaciones en nivel crítico", stats.nivelesCriticos || 0, "Combinaciones bajo el mínimo · máx. 32", "badge-crimson-subtle")}
                 {kpi("Solicitudes pendientes", "/assets/iconos_dash/bandeja.png", "Solicitudes pendientes", stats.solicitudesPendientes || 0, "Urgentes por atender", "badge-blue-subtle")}
               </>
             ) : (
@@ -306,8 +350,18 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
                             {inst.usuarios} usuarios · {inst.unidadesDisponibles} unidades disponibles
                           </span>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", backgroundColor: inst.solicitudesPendientes > 0 ? "#fef3c7" : "#dcfce7", color: inst.solicitudesPendientes > 0 ? "#b45309" : "#15803d", padding: "4px 12px", borderRadius: "20px", fontSize: "0.85rem", fontWeight: "600", gap: "6px" }}>
-                          {inst.solicitudesPendientes} pendientes
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <div style={{ display: "flex", alignItems: "center", backgroundColor: inst.solicitudesPendientes > 0 ? "#fef3c7" : "#dcfce7", color: inst.solicitudesPendientes > 0 ? "#b45309" : "#15803d", padding: "4px 12px", borderRadius: "20px", fontSize: "0.85rem", fontWeight: "600", gap: "6px" }}>
+                            {inst.solicitudesPendientes} pendientes
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmarEliminarInst(inst)}
+                            title="Eliminar institución (solo si no tiene usuarios, unidades ni solicitudes)"
+                            style={{ background: "none", border: "1px solid #fecaca", color: "#dc2626", borderRadius: "8px", padding: "4px 10px", fontSize: "0.85rem", fontWeight: "600", cursor: "pointer" }}
+                          >
+                            Eliminar
+                          </button>
                         </div>
                       </div>
                     ))
@@ -427,6 +481,29 @@ export default function Dashboard({ usuario, onLogout, onCambiarModulo }) {
           </section>
         </main>
       </div>
+
+      {/* Confirmación para eliminar una institución (solo admin general) */}
+      <ModalAviso
+        isOpen={Boolean(confirmarEliminarInst)}
+        tipo="confirmacion"
+        titulo="Eliminar institución"
+        mensaje={
+          confirmarEliminarInst
+            ? `¿Estás seguro de eliminar ${confirmarEliminarInst.nombre}? Solo se puede borrar si no tiene usuarios, unidades ni solicitudes asociadas.`
+            : ""
+        }
+        onClose={() => setConfirmarEliminarInst(null)}
+        textoAceptar="Eliminar"
+        onAceptar={confirmarEliminarInstitucion}
+      />
+
+      {/* Resultado de la eliminación (éxito o motivo del 409) */}
+      <ModalAviso
+        isOpen={Boolean(avisoAdmin)}
+        titulo={avisoAdmin?.titulo || "Aviso"}
+        mensaje={avisoAdmin?.mensaje || ""}
+        onClose={() => setAvisoAdmin(null)}
+      />
     </div>
   );
 }
