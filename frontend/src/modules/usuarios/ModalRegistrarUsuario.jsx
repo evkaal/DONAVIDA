@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { obtenerUsuarioSesion } from '../../services/sesionService';
 import './ModalRegistrarUsuario.css';
 import ModalAviso from '../../components/common/ModalAviso';
-import { registrarUsuario, obtenerInstituciones, obtenerRoles } from '../../services/usuariosService';
+import { registrarUsuario, obtenerInstituciones, obtenerRoles, nombreRolLegible } from '../../services/usuariosService';
 
 // Fallback si /catalogos/roles falla o la BD aún no tiene roles sembrados.
 // Sin duplicados: un solo registro por id.
@@ -44,9 +45,9 @@ const IconoOjoCerrado = (
 );
 
 export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, usuarioActual }) {
-  // Sesión del usuario que registra (prop o localStorage): de ahí sale su
+  // Sesión del usuario que registra (prop o sesión guardada): de ahí sale su
   // institución, que es la que se usa para el usuario nuevo.
-  const usuarioSesionModal = usuarioActual || JSON.parse(localStorage.getItem('usuario') || '{}');
+  const usuarioSesionModal = usuarioActual || obtenerUsuarioSesion();
   const esAdminGen = usuarioSesionModal?.rol_id === 1;
   const institucionSesionId = usuarioSesionModal?.institucion_id ?? null;
   const [rolesBd, setRolesBd] = useState([]);
@@ -55,7 +56,9 @@ export default function ModalRegistrarUsuario({ isOpen, onClose, onSaveSuccess, 
   const rolesBase = rolesBd.length > 0 ? rolesBd : ROLES_FALLBACK;
   const rolesDisponibles = rolesBase
     .filter((r) => esAdminGen || r.id !== 1)
-    .map((r) => ({ id: r.id, label: r.nombre }))
+    // El nombre que viene de la BD es el código interno (admin_general,
+    // admin_institucion, personal_medico): se muestra el nombre legible.
+    .map((r) => ({ id: r.id, label: nombreRolLegible(r.nombre) }))
     .filter((r, i, arr) => arr.findIndex((x) => x.id === r.id) === i);
 
   const [nombre, setNombre] = useState('');

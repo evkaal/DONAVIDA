@@ -1,8 +1,9 @@
 import api from './api';
+import { obtenerToken } from './sesionService';
 
 export const registrarUnidad = async (unidadData) => {
   try {
-    const token = localStorage.getItem('token');
+    const token = obtenerToken();
     const response = await api.post('/unidades', unidadData, {
       headers: {
         Authorization: `Bearer ${token}`
@@ -20,7 +21,7 @@ export const registrarUnidad = async (unidadData) => {
 
 export const registrarSalida = async (unidadId, motivo) => {
   try {
-    const token = localStorage.getItem('token');
+    const token = obtenerToken();
     const response = await api.post(`/unidades/${unidadId}/salida`, { motivo }, {
       headers: {
         Authorization: 'Bearer ' + token
@@ -37,7 +38,7 @@ export const registrarSalida = async (unidadId, motivo) => {
 
 export const getUnidades = async (institucionId) => {
   try{
-    const token = localStorage.getItem('token');
+    const token = obtenerToken();
     const q = institucionId ? `?institucion_id=${institucionId}` : '';
     const response = await api.get(`/unidades${q}`, {
       headers: {

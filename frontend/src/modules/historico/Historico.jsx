@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { obtenerUsuarioSesion } from '../../services/sesionService';
 import './Historico.css';
 import { Sidebar, Navbar } from '../../components/layout';
 import { obtenerHistorico } from '../../services/solicitudesService';
@@ -18,7 +19,7 @@ import { obtenerHistorico } from '../../services/solicitudesService';
  *    Query Params sugeridos:
  *      ?tipo=todas|enviadas|recibidas
  *      &busqueda=
- *      &estado=todos|completada|rechazada|cancelada
+ *      &estado=todos|pendiente|aceptada|completada|rechazada|cancelada
  *      &fecha_inicio=2026-10-01
  *      &fecha_fin=2026-10-20
  *      &pagina=1
@@ -43,7 +44,7 @@ import { obtenerHistorico } from '../../services/solicitudesService';
  *          "unidades": 3,
  *          "solicitada": "16 oct · 11:20",
  *          "cerrada": "16 oct · 14:05",
- *          "estado": "completada" // 'completada' | 'rechazada' | 'cancelada'
+ *          "estado": "pendiente" // 'pendiente' | 'aceptada' | 'completada' | 'rechazada' | 'cancelada'
  *        }
  *      ]
  *    }
@@ -67,7 +68,7 @@ export default function Historico({ usuario, onCambiarModulo, onLogout }) {
   const [solicitudes, setSolicitudes] = useState([]);
   const [errorCarga, setErrorCarga] = useState('');
 
-  const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
+  const usuarioSesion = usuario || obtenerUsuarioSesion();
   const esAdminGeneral = usuarioSesion?.rol_id === 1;
   // La institución es solo la de la sesión. Sin fallback: un usuario sin
   // institución no ve el histórico de nadie, ve el aviso.
@@ -351,6 +352,8 @@ export default function Historico({ usuario, onCambiarModulo, onLogout }) {
                     onChange={(e) => setFiltroEstado(e.target.value)}
                   >
                     <option value="todos">Estado: Todos</option>
+                    <option value="pendiente">Pendiente</option>
+                    <option value="aceptada">Aceptada</option>
                     <option value="completada">Completada</option>
                     <option value="rechazada">Rechazada</option>
                     <option value="cancelada">Cancelada</option>

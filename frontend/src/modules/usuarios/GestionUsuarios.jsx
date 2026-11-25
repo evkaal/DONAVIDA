@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
+import { obtenerUsuarioSesion } from '../../services/sesionService';
 import "./GestionUsuarios.css";
 import { Sidebar, Navbar } from "../../components/layout";
 import ModalRegistrarUsuario from "./ModalRegistrarUsuario";
 import ModalAviso from "../../components/common/ModalAviso";
-import { obtenerInstituciones, obtenerUsuarios, eliminarUsuarioService, cambiarEstadoUsuario, obtenerRoles } from "../../services/usuariosService";
+import { obtenerInstituciones, obtenerUsuarios, eliminarUsuarioService, cambiarEstadoUsuario, obtenerRoles, nombreRolLegible } from "../../services/usuariosService";
 import ModalRegistrarInstitucion from "../insti/ModalRegistrarInsti";
 
 export default function GestionUsuarios({
@@ -11,7 +12,7 @@ export default function GestionUsuarios({
   onCambiarModulo,
   onLogout,
 }) {
-  const userState = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
+  const userState = usuario || obtenerUsuarioSesion();
   // rol_id puede venir como número o como string: se normaliza con Number.
   const rolNumerico = Number(userState?.rol_id);
   const esAdminGeneral = rolNumerico === 1;
@@ -121,6 +122,23 @@ export default function GestionUsuarios({
   // el backend (roles.nombre). filtroInstitucion guarda el id; si el
   // backend no devuelve institucion_id, se compara por nombre.
   const rolSeleccionado = rolesList.find((r) => String(r.id) === String(filtroRol));
+  // Instituciones del filtro DEDUPLICADAS por nombre (punto 7a del QA):
+  // si la BD tiene dos filas "IMSS" (ids distintos), el filtro mostraba
+  // IMSS dos veces. Se muestra cada nombre una sola vez; al elegirlo,
+  // el filtro casa con CUALQUIER id que tenga ese nombre.
+  const normalizarNombreInst = (nombre) => String(nombre || '').trim().toLowerCase();
+  const institucionesFiltro = [];
+  const nombresInstVistos = new Set();
+  for (const inst of institucionesList) {
+    const clave = normalizarNombreInst(inst.nombre);
+    if (!clave || nombresInstVistos.has(clave)) continue;
+    nombresInstVistos.add(clave);
+    institucionesFiltro.push(inst);
+  }
+  const instSeleccionada = institucionesFiltro.find((i) => String(i.id) === String(filtroInstitucion));
+  const idsInstitucionSeleccionada = instSeleccionada
+    ? institucionesList.filter((i) => normalizarNombreInst(i.nombre) === normalizarNombreInst(instSeleccionada.nombre)).map((i) => String(i.id))
+    : [];
   const usuariosFiltrados = usuariosList.filter((u) => {
     if (busqueda.trim() !== '') {
       const q = busqueda.toLowerCase();
@@ -131,11 +149,11 @@ export default function GestionUsuarios({
       if (!rolSeleccionado && String(u.rol || '').toLowerCase() !== String(filtroRol).toLowerCase()) return false;
     }
     if (filtroInstitucion !== 'todas') {
+      const instSel = instSeleccionada || institucionesList.find((i) => String(i.id) === String(filtroInstitucion));
       if (u.institucion_id !== undefined && u.institucion_id !== null) {
-        if (String(u.institucion_id) !== String(filtroInstitucion)) return false;
-      } else {
-        const instSel = institucionesList.find((i) => String(i.id) === String(filtroInstitucion));
-        if (instSel && u.institucion !== instSel.nombre) return false;
+        if (!idsInstitucionSeleccionada.includes(String(u.institucion_id))) return false;
+      } else if (instSel && u.institucion !== instSel.nombre) {
+        return false;
       }
     }
     if (filtroEstado !== 'todos') {
@@ -306,7 +324,7 @@ export default function GestionUsuarios({
                   <option value="todos">Rol: Todos</option>
                   {rolesList.map((r) => (
                     <option key={r.id} value={r.id}>
-                      Rol: {r.nombre}
+                      Rol: {nombreRolLegible(r.nombre)}
                     </option>
                   ))}
                 </select>
@@ -317,7 +335,7 @@ export default function GestionUsuarios({
                   onChange={(e) => setFiltroInstitucion(e.target.value)}
                 >
                   <option value="todas">Institución: Todas</option>
-                  {institucionesList.map((inst) => (
+                  {institucionesFiltro.map((inst) => (
                     <option key={inst.id} value={inst.id}>
                       {inst.nombre}
                     </option>
@@ -361,7 +379,7 @@ export default function GestionUsuarios({
                   <div className="usuarios-table-row" key={u.id} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', padding: '12px 16px', alignItems: 'center', borderBottom: '1px solid #f1f5f9' }}>
                     <span>{u.nombre}</span>
                     <span>{u.email}</span>
-                    <span>{u.rol}</span>
+                    <span>{nombreRolLegible(u.rol)}</span>
                     <span>{u.institucion}</span>
                     <span>
                       <span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '0.8rem', backgroundColor: u.activo ? '#dcfce7' : '#f1f5f9', color: u.activo ? '#166534' : '#64748b' }}>

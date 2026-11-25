@@ -96,6 +96,7 @@ func main() {
 	mux.HandleFunc("/api/admin/test-email", handlers.TestEmail)
 	mux.HandleFunc("/api/dashboard/stats", handlers.GetDashboardStats)
 	mux.HandleFunc("/api/dashboard/stock-tipos", handlers.GetStockPorTipo)
+	mux.HandleFunc("/api/dashboard/actividad", handlers.GetActividadReciente)
 	mux.HandleFunc("/api/solicitudes/recientes", handlers.GetSolicitudesRecientes)
 	mux.HandleFunc("/api/stock", handlers.GetStock)
 
@@ -163,6 +164,8 @@ func main() {
 			handlers.GetInstituciones(w, r)
 		case http.MethodPost:
 			handlers.RegistrarInstitucion(w, r)
+		case http.MethodDelete:
+			handlers.EliminarInstitucion(w, r)
 		default:
 			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
 		}

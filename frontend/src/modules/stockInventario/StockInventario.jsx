@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { obtenerUsuarioSesion } from '../../services/sesionService';
 import './StockInventario.css';
 import { Sidebar, Navbar } from '../../components/layout';
 import ModalConfigurarAlertas from './ModalConfigurarAlertas';
@@ -13,7 +14,7 @@ export default function StockInventario({ usuario, onCambiarModulo, onLogout }) 
   const [hospitalSeleccionado, setHospitalSeleccionado] = useState('');
   const [institucionesList, setInstitucionesList] = useState([]);
 
-  const usuarioSesion = usuario || JSON.parse(localStorage.getItem('usuario') || '{}');
+  const usuarioSesion = usuario || obtenerUsuarioSesion();
   const esAdminGeneral = usuarioSesion?.rol_id === 1;
   // La institución es solo la de la sesión. Sin fallback: un usuario sin
   // institución no ve el stock de nadie, ve el aviso.

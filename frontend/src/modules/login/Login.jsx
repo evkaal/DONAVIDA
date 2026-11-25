@@ -1,12 +1,17 @@
 import React, { useState } from "react";
 import "./Login.css";
 import { loginUser } from "../../services/authService";
+import { guardarSesion } from "../../services/sesionService";
+import ModalAviso from "../../components/common/ModalAviso";
 
 export default function Login({ onLoginSuccess }) {
   // Estados del formulario
   const [correo, setCorreo] = useState("");
   const [password, setPassword] = useState("");
   const [recordarme, setRecordarme] = useState(false);
+
+  // Aviso de soporte / privacidad (ModalAviso, nunca alert()).
+  const [avisoLogin, setAvisoLogin] = useState(null);
 
   // Estados de interfaz
   const [mostrarPassword, setMostrarPassword] = useState(false);
@@ -35,24 +40,13 @@ export default function Login({ onLoginSuccess }) {
       setCargando(false);
       setLoginExitoso(true);
 
-      // Guardar el token JWT devuelto por Go en localStorage
-      if (data && data.token) {
-        localStorage.setItem("token", data.token);
-      }
-      // Guardar la sesión del usuario para que los módulos (Gestión de
-      // usuarios, Stock, Solicitudes...) sepan su rol e institución incluso
-      // tras refrescar la página.
+      // Guardar la sesión: con "Mantener sesión iniciada" marcado, en
+      // localStorage (sobrevive a recargar y a cerrar el navegador);
+      // sin marcarla, en sessionStorage (sobrevive a recargar, se borra
+      // al cerrar el navegador). Antes siempre iba a localStorage y la
+      // casilla no se usaba.
       if (data) {
-        const usuarioSesion = {
-          nombre: data.nombre,
-          email: data.email,
-          rol_id: data.rol_id,
-          institucion_id: data.institucion_id ?? null,
-          institucion: data.institucion ?? null,
-        };
-        localStorage.setItem("usuario", JSON.stringify(usuarioSesion));
-        localStorage.setItem("rol_id", String(data.rol_id ?? ""));
-        localStorage.setItem("institucion_id", String(data.institucion_id ?? ""));
+        guardarSesion(data, recordarme);
       }
 
       // Redirigir al dashboard únicamente si el login fue exitoso
@@ -112,7 +106,18 @@ export default function Login({ onLoginSuccess }) {
       <div className="login-right-panel col-12 col-lg-6">
         <div className="top-support-bar">
           <span>¿Necesitas ayuda?</span>
-          <a href="#soporte" className="support-link">
+          <a
+            href="#soporte"
+            className="support-link"
+            onClick={(e) => {
+              e.preventDefault();
+              setAvisoLogin({
+                titulo: "Contactar soporte",
+                mensaje:
+                  "Para reportar un problema o pedir ayuda con el sistema, contacta al administrador general de DONAVIDA o al administrador de tu institución. Ellos pueden revisar tu cuenta, tu institución y el estado del sistema.",
+              });
+            }}
+          >
             Contactar soporte
           </a>
         </div>
@@ -275,11 +280,30 @@ export default function Login({ onLoginSuccess }) {
         {/* Pie inferior con derechos y aviso de privacidad */}
         <div className="login-right-footer">
           <span>© 2026 DONAVIDA · Oaxaca de Juárez, Oax. · </span>
-          <a href="#privacidad" className="privacy-link">
+          <a
+            href="#privacidad"
+            className="privacy-link"
+            onClick={(e) => {
+              e.preventDefault();
+              setAvisoLogin({
+                titulo: "Aviso de privacidad",
+                mensaje:
+                  "DONAVIDA recaba únicamente los datos necesarios para operar la red de donación de sangre: tu nombre, tu correo institucional, tu institución y los datos de las unidades y solicitudes que registras. Tus datos solo se usan para la gestión del inventario y de las solicitudes entre las instituciones participantes, y no se comparten con terceros fuera de esa red. Para ejercer tus derechos sobre tus datos, contacta al administrador general de DONAVIDA.",
+              });
+            }}
+          >
             Aviso de privacidad
           </a>
         </div>
       </div>
+
+      {/* Modal de soporte / aviso de privacidad */}
+      <ModalAviso
+        isOpen={Boolean(avisoLogin)}
+        titulo={avisoLogin?.titulo || "Aviso"}
+        mensaje={avisoLogin?.mensaje || ""}
+        onClose={() => setAvisoLogin(null)}
+      />
     </div>
   );
 }

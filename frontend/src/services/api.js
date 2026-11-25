@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { obtenerToken } from './sesionService';
 
 // VITE_API_URL debe incluir /api, por ejemplo:
 // local: http://localhost:8080/api
@@ -13,7 +14,7 @@ const api = axios.create({
 
 // El token se agrega automáticamente, así no hay que repetirlo en cada servicio.
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = obtenerToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
