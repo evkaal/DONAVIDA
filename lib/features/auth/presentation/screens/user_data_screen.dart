@@ -1,11 +1,15 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/constants/app_assets.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/storage/secure_storage_service.dart';
 import '../../../../core/widgets/donavida_sliver_header.dart';
 import '../../data/models/user_model.dart';
+import 'select_account_screen.dart';
 
 // Front/Back: Pantalla de perfil y actualización de datos del donante
 class UserDataScreen extends StatefulWidget {
@@ -28,6 +32,9 @@ class _UserDataScreenState extends State<UserDataScreen> {
   late String _selectedColonia;
   late String _selectedBloodType;
 
+  // Front: Bloqueo de tipo de sangre para evitar toques accidentales
+  bool _isBloodTypeLocked = true;
+
   bool _isSaving = false;
 
   final List<String> _genderOptions = ['Mujer', 'Hombre', 'Otro'];
@@ -43,8 +50,16 @@ class _UserDataScreenState extends State<UserDataScreen> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.user?.nombre ?? '');
-    _birthDateController =
-        TextEditingController(text: widget.user?.fechaNacimiento ?? '');
+
+    // Front: Formatear fecha inicial a dd/mm/aaaa
+    final rawBirthDate = widget.user?.fechaNacimiento ?? '';
+    String formattedBirthDate = rawBirthDate;
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(rawBirthDate)) {
+      final parts = rawBirthDate.split('-');
+      formattedBirthDate = '${parts[2]}/${parts[1]}/${parts[0]}';
+    }
+    _birthDateController = TextEditingController(text: formattedBirthDate);
+
     _phoneController = TextEditingController(text: widget.user?.telefono ?? '');
     _emailController = TextEditingController(text: widget.user?.correo ?? '');
 
@@ -53,6 +68,43 @@ class _UserDataScreenState extends State<UserDataScreen> {
     _selectedBloodType = (widget.user?.tipoSangre.isNotEmpty ?? false)
         ? widget.user!.tipoSangre
         : 'O+';
+
+    // Backend: Cargar datos guardados del usuario si no se pasaron por constructor
+    _loadUserSession();
+  }
+
+  // Backend: Cargar datos guardados de la sesión para sincronizar el perfil
+  Future<void> _loadUserSession() async {
+    if (widget.user != null) return;
+    try {
+      final userJson = await SecureStorageService().getUserData();
+      if (userJson != null && userJson.isNotEmpty) {
+        final user = UserModel.fromJson(jsonDecode(userJson));
+        if (mounted) {
+          setState(() {
+            if (_nameController.text.isEmpty && user.nombre.isNotEmpty) {
+              _nameController.text = user.nombre;
+            }
+            if (_emailController.text.isEmpty && user.correo.isNotEmpty) {
+              _emailController.text = user.correo;
+            }
+            if (_phoneController.text.isEmpty && user.telefono != null) {
+              _phoneController.text = user.telefono!;
+            }
+            if (user.tipoSangre.isNotEmpty) {
+              _selectedBloodType = user.tipoSangre;
+            }
+            if (user.sexo != null && _genderOptions.contains(user.sexo)) {
+              _selectedGender = user.sexo!;
+            }
+            if (user.colonia != null &&
+                _coloniaOptions.contains(user.colonia)) {
+              _selectedColonia = user.colonia!;
+            }
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -75,6 +127,7 @@ class _UserDataScreenState extends State<UserDataScreen> {
     return name.isNotEmpty ? name[0].toUpperCase() : '--';
   }
 
+  // Front: Selector de fecha formateado a dd/mm/aaaa
   Future<void> _pickBirthDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -95,49 +148,245 @@ class _UserDataScreenState extends State<UserDataScreen> {
       },
     );
     if (picked != null) {
-      final months = [
-        'ene', 'feb', 'mar', 'abr', 'may', 'jun',
-        'jul', 'ago', 'sep', 'oct', 'nov', 'dic'
-      ];
+      final day = picked.day.toString().padLeft(2, '0');
+      final month = picked.month.toString().padLeft(2, '0');
+      final year = picked.year.toString();
       setState(() {
-        _birthDateController.text =
-            '${picked.day} ${months[picked.month - 1]} ${picked.year}';
+        _birthDateController.text = '$day/$month/$year';
       });
     }
   }
 
-  // Backend: Enviar datos actualizados del donante a PUT /donantes/perfil
+  void _showFeedback(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle_outline,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isError
+            ? const Color(0xFFE11D48)
+            : const Color(0xFF10B981),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  // Backend: Validar y enviar datos actualizados del donante a PUT /donantes/perfil
   Future<void> _saveChanges() async {
     if (_isSaving) return;
+
+    final name = _nameController.text.trim();
+    final birthDateStr = _birthDateController.text.trim();
+    final phone = _phoneController.text.trim();
+
+    // Front: Validación de nombre completo
+    if (name.isEmpty) {
+      _showFeedback('Por favor ingresa tu nombre completo', isError: true);
+      return;
+    }
+    if (name.length < 3) {
+      _showFeedback(
+        'El nombre debe tener al menos 3 caracteres',
+        isError: true,
+      );
+      return;
+    }
+
+    // Front: Validación de fecha de nacimiento dd/mm/aaaa y mayoría de edad
+    if (birthDateStr.isEmpty) {
+      _showFeedback(
+        'Por favor selecciona tu fecha de nacimiento',
+        isError: true,
+      );
+      return;
+    }
+    final dateParts = birthDateStr.split('/');
+    if (dateParts.length != 3) {
+      _showFeedback('El formato de fecha debe ser dd/mm/aaaa', isError: true);
+      return;
+    }
+    final day = int.tryParse(dateParts[0]);
+    final month = int.tryParse(dateParts[1]);
+    final year = int.tryParse(dateParts[2]);
+    if (day == null || month == null || year == null) {
+      _showFeedback('La fecha de nacimiento no es válida', isError: true);
+      return;
+    }
+    try {
+      final birthDate = DateTime(year, month, day);
+      final now = DateTime.now();
+      var age = now.year - birthDate.year;
+      if (now.month < birthDate.month ||
+          (now.month == birthDate.month && now.day < birthDate.day)) {
+        age--;
+      }
+      if (age < 18) {
+        _showFeedback(
+          'Debes tener al menos 18 años para ser donante',
+          isError: true,
+        );
+        return;
+      }
+      if (age > 65) {
+        _showFeedback(
+          'La edad máxima para donar sangre es de 65 años',
+          isError: true,
+        );
+        return;
+      }
+    } catch (_) {
+      _showFeedback(
+        'La fecha de nacimiento ingresada no es válida',
+        isError: true,
+      );
+      return;
+    }
+
+    // Front: Validación de teléfono (10 dígitos)
+    final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+    if (cleanPhone.isEmpty) {
+      _showFeedback('Por favor ingresa tu número de teléfono', isError: true);
+      return;
+    }
+    if (cleanPhone.length != 10) {
+      _showFeedback(
+        'El teléfono debe tener exactamente 10 dígitos',
+        isError: true,
+      );
+      return;
+    }
+
+    // Front: Validación de colonia
+    if (_selectedColonia.trim().isEmpty) {
+      _showFeedback('Por favor selecciona tu colonia', isError: true);
+      return;
+    }
+
+    // Front: Validación de tipo de sangre
+    if (_selectedBloodType.trim().isEmpty) {
+      _showFeedback('Por favor selecciona tu tipo de sangre', isError: true);
+      return;
+    }
 
     setState(() => _isSaving = true);
 
     try {
-      // Backend: Conectar aquí con la llamada a la API
+      // Backend: Conectar aquí con PUT /donantes/perfil
+      // await http.put(Uri.parse(ApiConstants.updateProfile), body: {
+      //   'nombre': name,
+      //   'fecha_nacimiento': birthDateStr,
+      //   'sexo': _selectedGender,
+      //   'telefono': cleanPhone,
+      //   'colonia': _selectedColonia,
+      //   'tipo_sangre': _selectedBloodType,
+      // });
       await Future.delayed(const Duration(milliseconds: 600));
 
+      // Backend: Guardar en storage local para mantener sesión sincronizada
+      final updatedUser = UserModel(
+        id: widget.user?.id ?? 'usr_current',
+        nombre: name,
+        correo: _emailController.text.trim(),
+        tipoSangre: _selectedBloodType,
+        fechaNacimiento: birthDateStr,
+        sexo: _selectedGender,
+        telefono: cleanPhone,
+        colonia: _selectedColonia,
+        fechaRegistro:
+            widget.user?.fechaRegistro ?? DateTime.now().year.toString(),
+      );
+      await SecureStorageService().saveUserData(
+        jsonEncode(updatedUser.toJson()),
+      );
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cambios guardados correctamente'),
-            backgroundColor: Color(0xFF10B981),
-            duration: Duration(seconds: 2),
-          ),
-        );
+        setState(() => _isBloodTypeLocked = true);
+        _showFeedback('Cambios guardados correctamente', isError: false);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar cambios: $e'),
-            backgroundColor: Colors.redAccent,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        _showFeedback('Error al guardar cambios: $e', isError: true);
       }
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  // Backend: Cerrar sesión en POST /auth/logout, limpiar tokens en storage y redirigir
+  Future<void> _handleLogout() async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          '¿Cerrar sesión?',
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+        content: Text(
+          '¿Estás seguro de que deseas salir de tu cuenta?',
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            color: const Color(0xFF64748B),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancelar',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE11D48),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              elevation: 0,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'Cerrar sesión',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout == true && mounted) {
+      // Backend: Llamar a ApiConstants.logout y limpiar almacenamiento local
+      await SecureStorageService().clearSession();
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const SelectAccountScreen()),
+          (route) => false,
+        );
       }
     }
   }
@@ -210,6 +459,34 @@ class _UserDataScreenState extends State<UserDataScreen> {
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      // Front: Botón de cerrar sesión con diálogo de confirmación
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFE11D48),
+                            side: const BorderSide(
+                              color: Color(0xFFFECDD3),
+                              width: 1.4,
+                            ),
+                            backgroundColor: const Color(0xFFFFF1F2),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          onPressed: _handleLogout,
+                          icon: const Icon(Icons.logout_rounded, size: 20),
+                          label: Text(
+                            'Cerrar sesión',
+                            style: GoogleFonts.inter(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 32),
@@ -356,9 +633,7 @@ class _UserDataScreenState extends State<UserDataScreen> {
     );
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // TARJETA 2: Información Personal
-  // ══════════════════════════════════════════════════════════════════════════
+  // Front: Tarjeta de información personal
   Widget _buildPersonalInfoCard() {
     return Container(
       width: double.infinity,
@@ -392,6 +667,11 @@ class _UserDataScreenState extends State<UserDataScreen> {
           TextField(
             controller: _nameController,
             onChanged: (_) => setState(() {}),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(
+                RegExp(r'[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]'),
+              ),
+            ],
             decoration: _inputDecoration(hint: 'Ingresa tu nombre completo'),
           ),
           const SizedBox(height: 14),
@@ -409,7 +689,7 @@ class _UserDataScreenState extends State<UserDataScreen> {
                       readOnly: true,
                       onTap: _pickBirthDate,
                       decoration: _inputDecoration(
-                        hint: 'Selecciona fecha',
+                        hint: 'dd/mm/aaaa',
                         suffixIcon: Padding(
                           padding: const EdgeInsets.all(12.0),
                           child: Image.asset(
@@ -463,7 +743,11 @@ class _UserDataScreenState extends State<UserDataScreen> {
                     TextField(
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
-                      decoration: _inputDecoration(hint: 'Ingresa tu teléfono'),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
+                      ],
+                      decoration: _inputDecoration(hint: '10 dígitos'),
                     ),
                   ],
                 ),
@@ -493,21 +777,10 @@ class _UserDataScreenState extends State<UserDataScreen> {
               _buildFieldLabel('Correo electrónico'),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 2,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  'Cuenta',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: const Color(0xFF64748B),
-                    fontWeight: FontWeight.w600,
-                  ),
                 ),
               ),
             ],
@@ -552,13 +825,95 @@ class _UserDataScreenState extends State<UserDataScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Tipo de sangre',
-            style: GoogleFonts.inter(
-              fontSize: 16.5,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF0F172A),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    'Tipo de sangre',
+                    style: GoogleFonts.inter(
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (_isBloodTypeLocked)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.lock_outline_rounded,
+                            size: 12,
+                            color: Color(0xFF64748B),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+              // Front: Botón para editar / desbloquear tipo de sangre
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _isBloodTypeLocked = !_isBloodTypeLocked;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _isBloodTypeLocked
+                        ? AppColors.primarySoft
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: _isBloodTypeLocked
+                          ? AppColors.primary.withOpacity(0.2)
+                          : const Color(0xFFCBD5E1),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isBloodTypeLocked
+                            ? Icons.edit_outlined
+                            : Icons.lock_outline_rounded,
+                        size: 14,
+                        color: _isBloodTypeLocked
+                            ? AppColors.primary
+                            : const Color(0xFF475569),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        _isBloodTypeLocked ? 'Editar' : 'Bloquear',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: _isBloodTypeLocked
+                              ? AppColors.primary
+                              : const Color(0xFF475569),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -598,6 +953,13 @@ class _UserDataScreenState extends State<UserDataScreen> {
 
     return GestureDetector(
       onTap: () {
+        if (_isBloodTypeLocked) {
+          _showFeedback(
+            'Presiona "Editar" para cambiar el tipo de sangre',
+            isError: true,
+          );
+          return;
+        }
         setState(() {
           _selectedBloodType = type;
         });
@@ -606,7 +968,9 @@ class _UserDataScreenState extends State<UserDataScreen> {
         duration: const Duration(milliseconds: 180),
         height: 42,
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primarySoft : Colors.white,
+          color: isSelected
+              ? AppColors.primarySoft
+              : (_isBloodTypeLocked ? const Color(0xFFF8FAFC) : Colors.white),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected ? AppColors.primary : const Color(0xFFE2E8F0),
@@ -619,7 +983,11 @@ class _UserDataScreenState extends State<UserDataScreen> {
             style: GoogleFonts.inter(
               fontSize: 13.5,
               fontWeight: FontWeight.w700,
-              color: isSelected ? AppColors.primary : const Color(0xFF0F172A),
+              color: isSelected
+                  ? AppColors.primary
+                  : (_isBloodTypeLocked
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF0F172A)),
             ),
           ),
         ),
@@ -638,10 +1006,7 @@ class _UserDataScreenState extends State<UserDataScreen> {
     );
   }
 
-  InputDecoration _inputDecoration({
-    required String hint,
-    Widget? suffixIcon,
-  }) {
+  InputDecoration _inputDecoration({required String hint, Widget? suffixIcon}) {
     return InputDecoration(
       hintText: hint,
       hintStyle: GoogleFonts.inter(

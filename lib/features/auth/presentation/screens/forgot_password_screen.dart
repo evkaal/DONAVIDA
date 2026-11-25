@@ -43,7 +43,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
     if (!emailRegex.hasMatch(email)) {
-      _showFeedback('Por favor ingresa un correo electrónico válido', isError: true);
+      _showFeedback(
+        'Por favor ingresa un correo electrónico válido',
+        isError: true,
+      );
       return;
     }
 
@@ -63,7 +66,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _showFeedback('No se pudo enviar el correo. Intenta nuevamente.', isError: true);
+        _showFeedback(
+          'No se pudo enviar el correo. Intenta nuevamente.',
+          isError: true,
+        );
       }
     }
   }
@@ -86,7 +92,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
           ],
         ),
-        backgroundColor: isError ? const Color(0xFFE11D48) : const Color(0xFF10B981),
+        backgroundColor: isError
+            ? const Color(0xFFE11D48)
+            : const Color(0xFF10B981),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         duration: const Duration(seconds: 3),

@@ -68,9 +68,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   // Front/Back: Abre el formulario de registro e inserta el resultado localmente
   Future<void> _abrirRegistroDonacion() async {
     final nuevo = await Navigator.of(context).push<DonationRecordModel>(
-      MaterialPageRoute(
-        builder: (_) => const RegisterDonationScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const RegisterDonationScreen()),
     );
 
     if (nuevo != null) {
@@ -104,10 +102,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         icon: const Icon(Icons.add_rounded, size: 22),
         label: Text(
           'Registrar donación',
-          style: GoogleFonts.inter(
-            fontWeight: FontWeight.w700,
-            fontSize: 13.5,
-          ),
+          style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13.5),
         ),
       ),
       body: Column(
@@ -130,10 +125,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         ] else ...[
                           _buildSectionHeader(donations.length),
                           const SizedBox(height: 14),
-                          ...donations.map((don) => Padding(
-                                padding: const EdgeInsets.only(bottom: 14.0),
-                                child: _buildDonationCard(don),
-                              )),
+                          ...donations.map(
+                            (don) => Padding(
+                              padding: const EdgeInsets.only(bottom: 14.0),
+                              child: _buildDonationCard(don),
+                            ),
+                          ),
                         ],
                         const SizedBox(height: 16),
                         _buildDevTestSelector(),
@@ -280,8 +277,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget _buildEligibilityCard(DonorEligibilityModel eligibility) {
     final isApto = eligibility.esApto;
     final borderColor = isApto ? const Color(0xFF10B981) : AppColors.primary;
-    final iconBgColor =
-        isApto ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2);
+    final iconBgColor = isApto
+        ? const Color(0xFFDCFCE7)
+        : const Color(0xFFFEE2E2);
     final statusColor = isApto ? const Color(0xFF059669) : AppColors.primary;
 
     return Container(
@@ -290,10 +288,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: borderColor,
-          width: 1.5,
-        ),
+        border: Border.all(color: borderColor, width: 1.5),
         boxShadow: [
           BoxShadow(
             color: borderColor.withOpacity(0.10),
@@ -420,31 +415,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
           ],
         ),
-        GestureDetector(
-          onTap: _abrirRegistroDonacion,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: AppColors.primarySoft,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.add_rounded, size: 16, color: AppColors.primary),
-                const SizedBox(width: 4),
-                Text(
-                  'Registrar',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -478,10 +448,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color(0xFFF1F5F9),
-          width: 1.2,
-        ),
+        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.2),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.03),
@@ -505,7 +472,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: badgeBg,
                   borderRadius: BorderRadius.circular(12),
@@ -686,9 +656,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
             height: 50,
             child: OutlinedButton.icon(
               onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const MapScreen()),
-                );
+                Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => const MapScreen()));
               },
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFF475569),
@@ -778,8 +747,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle,
-                      color: Color(0xFF10B981), size: 20),
+                  const Icon(
+                    Icons.check_circle,
+                    color: Color(0xFF10B981),
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -897,7 +869,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
                 onTap: () {
                   Navigator.of(ctx).pop();
-                  _adjuntarComprobanteADonacion(record, 'comprobante_archivo.pdf');
+                  _adjuntarComprobanteADonacion(
+                    record,
+                    'comprobante_archivo.pdf',
+                  );
                 },
               ),
             ],
@@ -908,7 +883,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   // Backend: Adjuntar comprobante al registro y sincronizar con API / storage
-  void _adjuntarComprobanteADonacion(DonationRecordModel record, String nombreArchivo) {
+  void _adjuntarComprobanteADonacion(
+    DonationRecordModel record,
+    String nombreArchivo,
+  ) {
     final idx = _donations.indexOf(record);
 
     if (idx == -1) {
@@ -920,7 +898,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
           backgroundColor: const Color(0xFF334155),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           margin: const EdgeInsets.all(16),
         ),
       );
@@ -940,12 +920,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+            const Icon(
+              Icons.check_circle_rounded,
+              color: Colors.white,
+              size: 18,
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 'Comprobante adjuntado correctamente.',
-                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500),
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ],
@@ -973,7 +960,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.tune_rounded, size: 16, color: Color(0xFF64748B)),
+              const Icon(
+                Icons.tune_rounded,
+                size: 16,
+                color: Color(0xFF64748B),
+              ),
               const SizedBox(width: 6),
               Text(
                 'Vista previa del diseño (Modo desarrollador):',
@@ -990,20 +981,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _buildTestChip(
-                  label: '0. Vacío (Por defecto)',
-                  index: 0,
-                ),
+                _buildTestChip(label: '0. Vacío (Por defecto)', index: 0),
                 const SizedBox(width: 8),
-                _buildTestChip(
-                  label: '1. Apto para donar',
-                  index: 1,
-                ),
+                _buildTestChip(label: '1. Apto para donar', index: 1),
                 const SizedBox(width: 8),
-                _buildTestChip(
-                  label: '2. No apto (Recuperando)',
-                  index: 2,
-                ),
+                _buildTestChip(label: '2. No apto (Recuperando)', index: 2),
               ],
             ),
           ),

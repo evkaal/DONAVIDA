@@ -1,10 +1,13 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/constants/app_assets.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/storage/secure_storage_service.dart';
 import '../../../../core/widgets/donavida_header.dart';
+import '../../data/models/user_model.dart';
 import 'main_menu_screen.dart';
 
 class CreateAccountScreen extends StatefulWidget {
@@ -64,7 +67,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   }
 
   // Backend: Validar formulario y registrar nuevo usuario en POST /auth/register
-  void _handleRegister() {
+  Future<void> _handleRegister() async {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -95,6 +98,18 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       _showError('Las contraseñas no coinciden');
       return;
     }
+
+    // Backend: Guardar usuario registrado para sincronizar con perfil y datos de usuario
+    final newUser = UserModel(
+      id: 'usr_${DateTime.now().millisecondsSinceEpoch}',
+      nombre: name,
+      correo: email,
+      tipoSangre: _selectedTipoSangre ?? 'O+',
+      fechaRegistro: DateTime.now().year.toString(),
+    );
+    await SecureStorageService().saveUserData(jsonEncode(newUser.toJson()));
+
+    if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
