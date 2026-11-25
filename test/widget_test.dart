@@ -8,5 +8,8 @@ void main() {
 
     // Verificar que la app carga
     expect(find.byType(DonavidaApp), findsOneWidget);
+
+    // Permitir que el temporizador del SplashScreen avance
+    await tester.pumpAndSettle(const Duration(seconds: 3));
   });
 }

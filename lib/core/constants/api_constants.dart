@@ -39,4 +39,3 @@ class ApiConstants {
   // Endpoints de Solicitudes
   static const String requests = '/solicitudes';
 }
-

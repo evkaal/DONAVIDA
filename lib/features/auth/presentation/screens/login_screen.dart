@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/constants/app_assets.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/donavida_header.dart';
+import 'forgot_password_screen.dart';
 import 'main_menu_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -20,6 +21,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailFocus = FocusNode();
   final _passwordFocus = FocusNode();
   bool _obscurePassword = true;
+  // Backend: Estado de "Mantener sesión" / Recordarme para persistir token JWT
+  bool _rememberMe = true;
 
   @override
   void initState() {
@@ -37,7 +40,8 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // Backend: Validar credenciales y autenticar contra POST /auth/login
+  // Backend: Validar credenciales contra POST /auth/login
+  // Backend: Si `_rememberMe` es true, persistir token en flutter_secure_storage para auto-login
   void _handleLogin() {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -76,16 +80,15 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           backgroundColor: const Color(0xFF10B981),
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           duration: const Duration(seconds: 2),
         ),
       );
 
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => const MainMenuScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const MainMenuScreen()),
       );
     } else {
       _showError('Correo o contraseña incorrectos');
@@ -287,44 +290,73 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: GestureDetector(
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Row(
-                                    children: [
-                                      const Icon(Icons.info_outline,
-                                          color: Colors.white),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          'Función disponible próximamente con el backend',
-                                          style: GoogleFonts.inter(
-                                              fontWeight: FontWeight.w500),
-                                        ),
+                        const SizedBox(height: 14),
+                        // Front/Backend: Casilla "Recordarme" y enlace "¿Olvidaste tu contraseña?"
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Backend: Flag `_rememberMe` ('recordarme' / 'mantener_sesion') para guardar token en storage
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _rememberMe = !_rememberMe;
+                                });
+                              },
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: Checkbox(
+                                      value: _rememberMe,
+                                      activeColor: AppColors.primary,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(4),
                                       ),
-                                    ],
+                                      side: const BorderSide(
+                                        color: Color(0xFFCBD5E1),
+                                        width: 1.5,
+                                      ),
+                                      onChanged: (val) {
+                                        setState(() {
+                                          _rememberMe = val ?? false;
+                                        });
+                                      },
+                                    ),
                                   ),
-                                  backgroundColor: const Color(0xFF334155),
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12)),
-                                  duration: const Duration(seconds: 2),
-                                ),
-                              );
-                            },
-                            child: Text(
-                              '¿Olvidaste tu contraseña?',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.primary,
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Recuerdame',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w500,
+                                      color: const Color(0xFF64748B),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
+                            // Front: Navegación a pantalla de recuperación de contraseña
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const ForgotPasswordScreen(),
+                                  ),
+                                );
+                              },
+                              child: Text(
+                                '¿Olvidaste tu contraseña?',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 26),
                         SizedBox(
