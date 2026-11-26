@@ -87,8 +87,9 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
 
-      Navigator.of(context).pushReplacement(
+      Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const MainMenuScreen()),
+        (route) => false,
       );
     } else {
       _showError('Correo o contraseña incorrectos');

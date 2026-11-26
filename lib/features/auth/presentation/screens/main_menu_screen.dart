@@ -14,14 +14,23 @@ import 'notifications_screen.dart';
 import 'history_screen.dart';
 
 // Front: Menú principal de la app con vista adaptada para usuario o invitado
-class MainMenuScreen extends StatelessWidget {
+class MainMenuScreen extends StatefulWidget {
   // Backend: true para modo invitado, false para donante autenticado
   final bool isGuest;
 
   const MainMenuScreen({super.key, this.isGuest = false});
 
   @override
+  State<MainMenuScreen> createState() => _MainMenuScreenState();
+}
+
+class _MainMenuScreenState extends State<MainMenuScreen> {
+  DateTime? _lastBackPressTime;
+
+  @override
   Widget build(BuildContext context) {
+    final isGuest = widget.isGuest;
+
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -29,7 +38,51 @@ class MainMenuScreen extends StatelessWidget {
       ),
     );
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) {
+        if (didPop) return;
+
+        // Si es invitado, el gesto atrás regresa al selector de cuenta
+        if (isGuest) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => const SelectAccountScreen(),
+            ),
+          );
+          return;
+        }
+
+        // Si es usuario autenticado, evitar cierre accidental con doble toque
+        final now = DateTime.now();
+        if (_lastBackPressTime == null ||
+            now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+          _lastBackPressTime = now;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Presiona de nuevo para salir de DonaVida',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              backgroundColor: const Color(0xFF1E293B),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        } else {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       body: SingleChildScrollView(
         child: Column(
@@ -100,8 +153,9 @@ class MainMenuScreen extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   // Front: Grid para usuario no registrado
   Widget _buildGuestGrid(BuildContext context) {

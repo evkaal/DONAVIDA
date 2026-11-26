@@ -32,8 +32,9 @@ class _UserDataScreenState extends State<UserDataScreen> {
   late String _selectedColonia;
   late String _selectedBloodType;
 
-  // Front: Bloqueo de tipo de sangre para evitar toques accidentales
+  // Front: Bloqueo de campos para evitar ediciones accidentales
   bool _isBloodTypeLocked = true;
+  bool _isNameLocked = true;
 
   bool _isSaving = false;
 
@@ -314,7 +315,10 @@ class _UserDataScreenState extends State<UserDataScreen> {
       );
 
       if (mounted) {
-        setState(() => _isBloodTypeLocked = true);
+        setState(() {
+          _isBloodTypeLocked = true;
+          _isNameLocked = true;
+        });
         _showFeedback('Cambios guardados correctamente', isError: false);
       }
     } catch (e) {
@@ -662,17 +666,90 @@ class _UserDataScreenState extends State<UserDataScreen> {
           ),
           const SizedBox(height: 16),
 
-          _buildFieldLabel('Nombre completo'),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(children: [_buildFieldLabel('Nombre completo')]),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _isNameLocked = !_isNameLocked;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _isNameLocked
+                        ? AppColors.primarySoft
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _isNameLocked
+                          ? AppColors.primary.withOpacity(0.2)
+                          : const Color(0xFFCBD5E1),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isNameLocked
+                            ? Icons.edit_outlined
+                            : Icons.lock_outline_rounded,
+                        size: 13,
+                        color: _isNameLocked
+                            ? AppColors.primary
+                            : const Color(0xFF475569),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _isNameLocked ? 'Editar' : 'Bloquear',
+                        style: GoogleFonts.inter(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: _isNameLocked
+                              ? AppColors.primary
+                              : const Color(0xFF475569),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 6),
           TextField(
             controller: _nameController,
+            readOnly: _isNameLocked,
+            onTap: _isNameLocked
+                ? () {
+                    _showFeedback(
+                      'Presiona "Editar" para modificar tu nombre',
+                      isError: true,
+                    );
+                  }
+                : null,
             onChanged: (_) => setState(() {}),
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: _isNameLocked
+                  ? const Color(0xFF64748B)
+                  : const Color(0xFF0F172A),
+              fontWeight: FontWeight.w500,
+            ),
             inputFormatters: [
               FilteringTextInputFormatter.allow(
                 RegExp(r'[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]'),
               ),
             ],
-            decoration: _inputDecoration(hint: 'Ingresa tu nombre completo'),
+            decoration: _inputDecoration(
+              hint: 'Ingresa tu nombre completo',
+              isLocked: _isNameLocked,
+            ),
           ),
           const SizedBox(height: 14),
           Row(
@@ -839,28 +916,6 @@ class _UserDataScreenState extends State<UserDataScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  if (_isBloodTypeLocked)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.lock_outline_rounded,
-                            size: 12,
-                            color: Color(0xFF64748B),
-                          ),
-                          const SizedBox(width: 4),
-                        ],
-                      ),
-                    ),
                 ],
               ),
               // Front: Botón para editar / desbloquear tipo de sangre
@@ -1006,9 +1061,15 @@ class _UserDataScreenState extends State<UserDataScreen> {
     );
   }
 
-  InputDecoration _inputDecoration({required String hint, Widget? suffixIcon}) {
+  InputDecoration _inputDecoration({
+    required String hint,
+    Widget? suffixIcon,
+    bool isLocked = false,
+  }) {
     return InputDecoration(
       hintText: hint,
+      filled: isLocked,
+      fillColor: isLocked ? const Color(0xFFF8FAFC) : Colors.white,
       hintStyle: GoogleFonts.inter(
         fontSize: 14,
         color: const Color(0xFF94A3B8),
@@ -1026,7 +1087,10 @@ class _UserDataScreenState extends State<UserDataScreen> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+        borderSide: BorderSide(
+          color: isLocked ? const Color(0xFFCBD5E1) : AppColors.primary,
+          width: isLocked ? 1.0 : 1.5,
+        ),
       ),
     );
   }
