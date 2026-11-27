@@ -1,10 +1,15 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/constants/app_assets.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/storage/secure_storage_service.dart';
 import '../../../../core/widgets/donavida_header.dart';
+import '../../data/models/user_model.dart';
 import 'forgot_password_screen.dart';
 import 'main_menu_screen.dart';
 
@@ -23,6 +28,8 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   // Backend: Estado de "Mantener sesión" / Recordarme para persistir token JWT
   bool _rememberMe = true;
+  bool _isLoading = false;
+  final _apiClient = ApiClient();
 
   @override
   void initState() {
@@ -40,9 +47,13 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // Backend: Validar credenciales contra POST /auth/login
-  // Backend: Si `_rememberMe` es true, persistir token en flutter_secure_storage para auto-login
-  void _handleLogin() {
+  // Backend: Inicio de sesión real contra POST /api/auth/login.
+  // El backend busca primero en `usuarios` (web, incluye admin_movil)
+  // y luego en `usuarios_moviles`. Solo los donantes (rol usuario_movil)
+  // entran al menú de la app. El login NO devuelve el perfil completo,
+  // así que después se pide GET /api/auth/profile para guardar los datos
+  // reales del usuario (id, tipo_sangre, etc.).
+  Future<void> _handleLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
@@ -62,8 +73,45 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // Dev/Test: Usuario de prueba local antes de conectar con API
-    if (email == 'prueba@donavida.com' && password == '1234') {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final data = await _apiClient.login(correo: email, password: password);
+      final token = data['token'] as String?;
+      final rol = (data['rol'] as String?) ?? '';
+
+      if (token == null || token.isEmpty) {
+        _showError('No se pudo iniciar sesión. Intenta de nuevo.');
+        return;
+      }
+
+      // Esta app es solo para donantes: una cuenta de equipo
+      // (p. ej. admin_movil) no entra al menú principal.
+      if (rol != 'usuario_movil') {
+        _showError(
+          'Esta aplicación es para donantes. Tu cuenta no es de donante.',
+        );
+        return;
+      }
+
+      final storage = SecureStorageService();
+      await storage.saveToken(token);
+
+      // Perfil completo para guardar los datos reales del usuario.
+      // Si falla, se borra el token para no dejar la sesión a medias.
+      try {
+        final profile = await _apiClient.getProfile();
+        final user = UserModel.fromJson({...profile, 'token': token});
+        await storage.saveUserData(jsonEncode(user.toJson()));
+      } catch (_) {
+        await storage.clearSession();
+        rethrow;
+      }
+      await storage.setRememberMe(_rememberMe, email);
+
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -80,9 +128,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           backgroundColor: const Color(0xFF10B981),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -91,8 +137,18 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(builder: (_) => const MainMenuScreen()),
         (route) => false,
       );
-    } else {
-      _showError('Correo o contraseña incorrectos');
+    } on ApiException catch (e) {
+      if (e.statusCode == 401) {
+        _showError('Correo o contraseña incorrectos');
+      } else {
+        _showError(e.message);
+      }
+    } catch (_) {
+      _showError(
+        'No se pudo conectar con el servidor. Revisa tu conexión a internet.',
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -373,14 +429,23 @@ class _LoginScreenState extends State<LoginScreen> {
                                 borderRadius: BorderRadius.circular(14),
                               ),
                             ),
-                            onPressed: _handleLogin,
-                            child: Text(
-                              'Iniciar sesión',
-                              style: GoogleFonts.inter(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                            onPressed: _isLoading ? null : _handleLogin,
+                            child: _isLoading
+                                ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2.5,
+                                    ),
+                                  )
+                                : Text(
+                                    'Iniciar sesión',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                           ),
                         ),
                       ],

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/constants/app_assets.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/storage/secure_storage_service.dart';
 import '../../../../core/widgets/donavida_header.dart';
 import '../../data/models/user_model.dart';
@@ -42,6 +43,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   bool _obscurePassword = true;
   bool _obscureRepeatPassword = true;
+  bool _isLoading = false;
+  final _apiClient = ApiClient();
 
   @override
   void initState() {
@@ -66,7 +69,21 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     super.dispose();
   }
 
-  // Backend: Validar formulario y registrar nuevo usuario en POST /auth/register
+  // Backend: la contraseña debe cumplir la misma regla fuerte que exige
+  // el servidor (mín. 8 caracteres con mayúscula, minúscula y número);
+  // si no, el registro da 400.
+  bool _esContrasenaSegura(String password) {
+    if (password.length < 8) return false;
+    if (!RegExp(r'[A-Z]').hasMatch(password)) return false;
+    if (!RegExp(r'[a-z]').hasMatch(password)) return false;
+    if (!RegExp(r'[0-9]').hasMatch(password)) return false;
+    return true;
+  }
+
+  // Backend: Registrar el donante en POST /api/auth/register y guardar
+  // el usuario REAL que devuelve el backend (id de la base de datos).
+  // El UserModel guardado en SecureStorage es lo que lee después la
+  // pantalla "Datos del usuario" para sincronizar el tipo de sangre.
   Future<void> _handleRegister() async {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
@@ -89,8 +106,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       return;
     }
 
-    if (password.isEmpty || password.length < 4) {
-      _showError('La contraseña debe tener al menos 4 caracteres');
+    if (!_esContrasenaSegura(password)) {
+      _showError(
+        'La contraseña debe tener al menos 8 caracteres e incluir mayúscula, minúscula y número',
+      );
       return;
     }
 
@@ -99,45 +118,75 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       return;
     }
 
-    // Backend: Guardar usuario registrado para sincronizar con perfil y datos de usuario
-    final newUser = UserModel(
-      id: 'usr_${DateTime.now().millisecondsSinceEpoch}',
-      nombre: name,
-      correo: email,
-      tipoSangre: _selectedTipoSangre ?? 'O+',
-      fechaRegistro: DateTime.now().year.toString(),
-    );
-    await SecureStorageService().saveUserData(jsonEncode(newUser.toJson()));
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
 
-    if (!mounted) return;
+    try {
+      final data = await _apiClient.register(
+        nombre: name,
+        correo: email,
+        password: password,
+        tipoSangre: _selectedTipoSangre!,
+      );
+      final token = data['token'] as String?;
+      final usuario = data['usuario'] as Map<String, dynamic>?;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.white),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                '¡Cuenta creada con éxito! Bienvenido, $name',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+      if (token == null || token.isEmpty || usuario == null) {
+        _showError('No se pudo crear la cuenta. Intenta de nuevo.');
+        return;
+      }
+
+      final newUser = UserModel.fromJson({...usuario, 'token': token});
+      final storage = SecureStorageService();
+      await storage.saveToken(token);
+      await storage.saveUserData(jsonEncode(newUser.toJson()));
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '¡Cuenta creada con éxito! Bienvenido, $name',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+          backgroundColor: const Color(0xFF10B981),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          duration: const Duration(seconds: 2),
         ),
-        backgroundColor: const Color(0xFF10B981),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+      );
 
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => const MainMenuScreen(isGuest: false),
-      ),
-      (route) => false,
-    );
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => const MainMenuScreen(isGuest: false),
+        ),
+        (route) => false,
+      );
+    } on ApiException catch (e) {
+      if (e.statusCode == 409) {
+        _showError('Ese correo ya está registrado');
+      } else {
+        // 400 (p. ej. contraseña débil o nombre con números): el mensaje
+        // viene del backend.
+        _showError(e.message);
+      }
+    } catch (_) {
+      _showError(
+        'No se pudo conectar con el servidor. Revisa tu conexión a internet.',
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   void _showError(String message) {
@@ -553,14 +602,23 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                 borderRadius: BorderRadius.circular(14),
                               ),
                             ),
-                            onPressed: _handleRegister,
-                            child: Text(
-                              'Registrarse',
-                              style: GoogleFonts.inter(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                            onPressed: _isLoading ? null : _handleRegister,
+                            child: _isLoading
+                                ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2.5,
+                                    ),
+                                  )
+                                : Text(
+                                    'Registrarse',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                           ),
                         ),
                       ],

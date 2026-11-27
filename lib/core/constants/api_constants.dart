@@ -1,9 +1,11 @@
 /// Constantes de la API REST en Go para DONAVIDA
 class ApiConstants {
   // 🎯 [BACKEND] Configurar la URL base del servidor Go (local o producción)
+  // Producción (VPS con HTTPS): 'https://donavida.casa/api'
   // Para emulador Android usar 'http://10.0.2.2:8080/api'
   // Para dispositivo físico usar la IP local de tu máquina, ej: 'http://192.168.1.XX:8080/api'
-  static const String baseUrl = 'http://10.0.2.2:8080/api';
+  // Para backend local en la misma PC usar 'http://localhost:8080/api'
+  static const String baseUrl = 'https://donavida.casa/api';
 
   // Timeout de peticiones
   static const Duration connectTimeout = Duration(seconds: 15);
