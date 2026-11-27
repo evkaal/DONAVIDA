@@ -39,7 +39,7 @@ export const obtenerUsuarios = async () => {
   }
 };
 
-export const eliminarUuarioService = async (id) => {
+export const eliminarUsuarioService = async (id) => {
   const response = await api.delete(`/usuarios/${id}`);
   return response.data;
 };
