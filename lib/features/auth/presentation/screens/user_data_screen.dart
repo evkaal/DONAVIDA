@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/constants/app_assets.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/storage/secure_storage_service.dart';
 import '../../../../core/widgets/donavida_sliver_header.dart';
 import '../../data/models/user_model.dart';
@@ -23,14 +24,24 @@ class UserDataScreen extends StatefulWidget {
 }
 
 class _UserDataScreenState extends State<UserDataScreen> {
+  final _apiClient = ApiClient();
+
   late final TextEditingController _nameController;
   late final TextEditingController _birthDateController;
   late final TextEditingController _phoneController;
   late final TextEditingController _emailController;
 
-  late String _selectedGender;
-  late String _selectedColonia;
-  late String _selectedBloodType;
+  // Sin valores inventados: si el usuario no tiene sexo/colonia, quedan
+  // en "Selecciona" (null); si no tiene tipo de sangre, queda sin elegir.
+  String? _selectedGender;
+  String? _selectedColonia;
+  String _selectedBloodType = '';
+
+  // Backend: Perfil real del servidor (lo usa la cabecera para
+  // "Donante desde {año}") y marca de que ya se aplicó: el respaldo
+  // local no debe pisarlo después.
+  UserModel? _perfil;
+  bool _perfilCargado = false;
 
   // Front: Bloqueo de campos para evitar ediciones accidentales
   bool _isBloodTypeLocked = true;
@@ -51,40 +62,53 @@ class _UserDataScreenState extends State<UserDataScreen> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.user?.nombre ?? '');
-
-    // Front: Formatear fecha inicial a dd/mm/aaaa
-    final rawBirthDate = widget.user?.fechaNacimiento ?? '';
-    String formattedBirthDate = rawBirthDate;
-    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(rawBirthDate)) {
-      final parts = rawBirthDate.split('-');
-      formattedBirthDate = '${parts[2]}/${parts[1]}/${parts[0]}';
-    }
-    _birthDateController = TextEditingController(text: formattedBirthDate);
-
+    _birthDateController = TextEditingController(
+      text: _fechaADisplay(widget.user?.fechaNacimiento),
+    );
     _phoneController = TextEditingController(text: widget.user?.telefono ?? '');
     _emailController = TextEditingController(text: widget.user?.correo ?? '');
 
-    _selectedGender = widget.user?.sexo ?? 'Mujer';
-    _selectedColonia = widget.user?.colonia ?? 'Centro';
-    _selectedBloodType = (widget.user?.tipoSangre.isNotEmpty ?? false)
+    // Sin valores inventados: solo se toma lo que el usuario ya tiene
+    // guardado; lo demás queda en "Selecciona" / sin elegir.
+    _selectedGender = (widget.user?.sexo != null &&
+            _genderOptions.contains(widget.user!.sexo))
+        ? widget.user!.sexo
+        : null;
+    _selectedColonia = (widget.user?.colonia != null &&
+            _coloniaOptions.contains(widget.user!.colonia))
+        ? widget.user!.colonia
+        : null;
+    _selectedBloodType = (widget.user != null &&
+            _tiposSangreValidos.contains(widget.user!.tipoSangre))
         ? widget.user!.tipoSangre
-        : 'O+';
+        : '';
 
     // Backend: Cargar datos guardados del usuario si no se pasaron por constructor
     _loadUserSession();
+    // Backend: Cargar el perfil real del servidor (es el que manda).
+    _cargarPerfilServidor();
   }
 
   // Backend: Cargar datos guardados de la sesión para sincronizar el perfil
+  // (respaldo cuando el servidor no responde). No pisa el perfil del
+  // servidor si este ya se aplicó.
   Future<void> _loadUserSession() async {
     if (widget.user != null) return;
     try {
       final userJson = await SecureStorageService().getUserData();
       if (userJson != null && userJson.isNotEmpty) {
         final user = UserModel.fromJson(jsonDecode(userJson));
+        if (_perfilCargado) return;
         if (mounted) {
           setState(() {
             if (_nameController.text.isEmpty && user.nombre.isNotEmpty) {
               _nameController.text = user.nombre;
+            }
+            if (_birthDateController.text.isEmpty &&
+                user.fechaNacimiento != null &&
+                user.fechaNacimiento!.isNotEmpty) {
+              _birthDateController.text =
+                  _fechaADisplay(user.fechaNacimiento);
             }
             if (_emailController.text.isEmpty && user.correo.isNotEmpty) {
               _emailController.text = user.correo;
@@ -92,7 +116,8 @@ class _UserDataScreenState extends State<UserDataScreen> {
             if (_phoneController.text.isEmpty && user.telefono != null) {
               _phoneController.text = user.telefono!;
             }
-            if (user.tipoSangre.isNotEmpty) {
+            if (user.tipoSangre.isNotEmpty &&
+                _tiposSangreValidos.contains(user.tipoSangre)) {
               _selectedBloodType = user.tipoSangre;
             }
             if (user.sexo != null && _genderOptions.contains(user.sexo)) {
@@ -106,6 +131,148 @@ class _UserDataScreenState extends State<UserDataScreen> {
         }
       }
     } catch (_) {}
+  }
+
+  // Backend: Meses abreviados en español, como los devuelve el backend
+  // en fecha_nacimiento ("15 ene 1990").
+  static const Map<String, String> _mesesEspanol = {
+    'ene': '01',
+    'feb': '02',
+    'mar': '03',
+    'abr': '04',
+    'may': '05',
+    'jun': '06',
+    'jul': '07',
+    'ago': '08',
+    'sep': '09',
+    'oct': '10',
+    'nov': '11',
+    'dic': '12',
+  };
+
+  static const List<String> _tiposSangreValidos = [
+    'A+',
+    'A-',
+    'B+',
+    'B-',
+    'AB+',
+    'AB-',
+    'O+',
+    'O-',
+  ];
+
+  /// Convierte una fecha del backend/local a dd/mm/aaaa para mostrarla:
+  /// acepta ISO ("1990-01-15"), texto del backend ("15 ene 1990") y
+  /// dd/mm/aaaa (pasa tal cual).
+  String _fechaADisplay(String? raw) {
+    if (raw == null) return '';
+    final value = raw.trim();
+    if (value.isEmpty) return '';
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) {
+      final parts = value.split('-');
+      return '${parts[2]}/${parts[1]}/${parts[0]}';
+    }
+    final match =
+        RegExp(r'^(\d{1,2})\s+([a-zA-Z]{3})\s+(\d{4})$').firstMatch(value);
+    if (match != null) {
+      final mes = _mesesEspanol[match.group(2)!.toLowerCase()];
+      if (mes != null) {
+        final dia = match.group(1)!.padLeft(2, '0');
+        return '$dia/$mes/${match.group(3)}';
+      }
+    }
+    return value;
+  }
+
+  /// Convierte dd/mm/aaaa (lo que muestra el campo) a ISO yyyy-MM-dd
+  /// para mandar al backend.
+  String _fechaAIso(String display) {
+    final parts = display.split('/');
+    final dia = parts[0].padLeft(2, '0');
+    final mes = parts[1].padLeft(2, '0');
+    return '${parts[2]}-$mes-$dia';
+  }
+
+  /// Construye el UserModel desde el JSON del perfil del backend.
+  /// NO usar UserModel.fromJson aquí: el perfil trae fecha_nacimiento
+  /// ("15 ene 1990") y fecha_nacimiento_iso ("1990-01-15"), y fromJson
+  /// lee la primera, que el campo dd/mm/aaaa no entiende. Se usa la ISO
+  /// (initState/_fechaADisplay la convierten a dd/mm/aaaa).
+  UserModel _perfilDesdeJson(Map<String, dynamic> json) {
+    return UserModel(
+      id: json['id']?.toString() ?? '',
+      nombre: json['nombre'] as String? ?? '',
+      correo: json['correo'] as String? ?? '',
+      tipoSangre: json['tipo_sangre'] as String? ?? '',
+      fechaNacimiento: json['fecha_nacimiento_iso'] as String?,
+      sexo: json['sexo'] as String?,
+      telefono: json['telefono'] as String?,
+      colonia: json['colonia'] as String?,
+      fechaRegistro: json['fecha_registro']?.toString(),
+      token: json['token'] as String?,
+    );
+  }
+
+  /// Aplica un perfil al formulario (el del servidor manda: los nulos
+  /// quedan vacíos o en "Selecciona", nunca se inventan valores).
+  void _aplicarPerfil(UserModel p) {
+    _nameController.text = p.nombre;
+    _emailController.text = p.correo;
+    _phoneController.text = p.telefono ?? '';
+    _birthDateController.text = _fechaADisplay(p.fechaNacimiento);
+    _selectedGender =
+        (p.sexo != null && _genderOptions.contains(p.sexo)) ? p.sexo : null;
+    _selectedColonia =
+        (p.colonia != null && _coloniaOptions.contains(p.colonia))
+            ? p.colonia
+            : null;
+    _selectedBloodType =
+        _tiposSangreValidos.contains(p.tipoSangre) ? p.tipoSangre : '';
+    _perfil = p;
+  }
+
+  // Backend: Cargar el perfil real del servidor (GET /api/auth/profile)
+  // al abrir la pantalla. El servidor manda: los nulos quedan vacíos o
+  // en "Selecciona". Si falla (sin red), quedan los datos guardados en
+  // el dispositivo y se avisa.
+  Future<void> _cargarPerfilServidor() async {
+    try {
+      final perfilJson = await _apiClient.getProfile();
+      final perfil = _perfilDesdeJson(perfilJson);
+      // Guardar el perfil del servidor en local (sin tocar el token:
+      // el perfil no trae token salvo cambio de correo).
+      final tokenActual = await SecureStorageService().getToken();
+      final paraGuardar = UserModel(
+        id: perfil.id,
+        nombre: perfil.nombre,
+        correo: perfil.correo,
+        tipoSangre: perfil.tipoSangre,
+        fechaNacimiento: perfil.fechaNacimiento,
+        sexo: perfil.sexo,
+        telefono: perfil.telefono,
+        colonia: perfil.colonia,
+        fechaRegistro: perfil.fechaRegistro,
+        token: perfil.token ?? tokenActual,
+      );
+      await SecureStorageService().saveUserData(
+        jsonEncode(paraGuardar.toJson()),
+      );
+      if (!mounted) return;
+      setState(() {
+        _perfilCargado = true;
+        _aplicarPerfil(paraGuardar);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      final hayDatosLocales = _nameController.text.trim().isNotEmpty ||
+          _emailController.text.trim().isNotEmpty;
+      _showFeedback(
+        hayDatosLocales
+            ? 'No se pudo cargar tu perfil del servidor. Se muestran los datos guardados en este dispositivo.'
+            : 'No se pudo cargar tu perfil. Revisa tu conexión a internet.',
+        isError: true,
+      );
+    }
   }
 
   @override
@@ -272,7 +439,7 @@ class _UserDataScreenState extends State<UserDataScreen> {
     }
 
     // Front: Validación de colonia
-    if (_selectedColonia.trim().isEmpty) {
+    if (_selectedColonia == null || _selectedColonia!.trim().isEmpty) {
       _showFeedback('Por favor selecciona tu colonia', isError: true);
       return;
     }
@@ -286,44 +453,60 @@ class _UserDataScreenState extends State<UserDataScreen> {
     setState(() => _isSaving = true);
 
     try {
-      // Backend: Conectar aquí con PUT /donantes/perfil
-      // await http.put(Uri.parse(ApiConstants.updateProfile), body: {
-      //   'nombre': name,
-      //   'fecha_nacimiento': birthDateStr,
-      //   'sexo': _selectedGender,
-      //   'telefono': cleanPhone,
-      //   'colonia': _selectedColonia,
-      //   'tipo_sangre': _selectedBloodType,
-      // });
-      await Future.delayed(const Duration(milliseconds: 600));
+      // Backend: Guardar en el servidor (PUT /donantes/perfil). El
+      // correo no se manda: está bloqueado en la UI. El sexo solo se
+      // manda si el usuario eligió uno (en "Selecciona", el servidor
+      // lo deja como está). La fecha va en ISO (yyyy-MM-dd).
+      final fechaIso = _fechaAIso(birthDateStr);
+      final perfilJson = await _apiClient.updateProfile({
+        'nombre': name,
+        'fecha_nacimiento': fechaIso,
+        'telefono': cleanPhone,
+        'colonia': _selectedColonia,
+        'tipo_sangre': _selectedBloodType,
+        if (_selectedGender != null && _selectedGender!.isNotEmpty)
+          'sexo': _selectedGender,
+      });
 
-      // Backend: Guardar en storage local para mantener sesión sincronizada
-      final updatedUser = UserModel(
-        id: widget.user?.id ?? 'usr_current',
-        nombre: name,
-        correo: _emailController.text.trim(),
-        tipoSangre: _selectedBloodType,
-        fechaNacimiento: birthDateStr,
-        sexo: _selectedGender,
-        telefono: cleanPhone,
-        colonia: _selectedColonia,
-        fechaRegistro:
-            widget.user?.fechaRegistro ?? DateTime.now().year.toString(),
+      // Backend: Guardar en local el perfil DEVUELTO por el servidor
+      // (id real del servidor) sin perder el token actual: el
+      // PUT solo trae token nuevo si cambia el correo, y la app no lo
+      // permite cambiar.
+      final perfil = _perfilDesdeJson(perfilJson);
+      final tokenActual = await SecureStorageService().getToken();
+      final actualizado = UserModel(
+        id: perfil.id,
+        nombre: perfil.nombre,
+        correo: perfil.correo,
+        tipoSangre: perfil.tipoSangre,
+        fechaNacimiento: perfil.fechaNacimiento,
+        sexo: perfil.sexo,
+        telefono: perfil.telefono,
+        colonia: perfil.colonia,
+        fechaRegistro: perfil.fechaRegistro,
+        token: perfil.token ?? tokenActual,
       );
       await SecureStorageService().saveUserData(
-        jsonEncode(updatedUser.toJson()),
+        jsonEncode(actualizado.toJson()),
       );
 
       if (mounted) {
         setState(() {
+          _perfilCargado = true;
+          _aplicarPerfil(actualizado);
           _isBloodTypeLocked = true;
           _isNameLocked = true;
         });
         _showFeedback('Cambios guardados correctamente', isError: false);
       }
-    } catch (e) {
+    } on ApiException catch (e) {
       if (mounted) {
-        _showFeedback('Error al guardar cambios: $e', isError: true);
+        _showFeedback(e.message, isError: true);
+      }
+    } catch (_) {
+      if (mounted) {
+        _showFeedback('Error al guardar cambios. Intenta de nuevo.',
+            isError: true);
       }
     } finally {
       if (mounted) {
@@ -511,8 +694,9 @@ class _UserDataScreenState extends State<UserDataScreen> {
         ? _nameController.text.trim()
         : 'Nombre del donante';
 
-    final registerText = widget.user?.fechaRegistro != null
-        ? 'Donante desde ${widget.user!.fechaRegistro}'
+    final fechaRegistro = _perfil?.fechaRegistro ?? widget.user?.fechaRegistro;
+    final registerText = fechaRegistro != null
+        ? 'Donante desde $fechaRegistro'
         : 'Donante registrado';
 
     return Container(
@@ -1096,7 +1280,7 @@ class _UserDataScreenState extends State<UserDataScreen> {
   }
 
   Widget _buildDropdown({
-    required String value,
+    required String? value,
     required List<String> items,
     required ValueChanged<String?> onChanged,
   }) {
@@ -1111,6 +1295,14 @@ class _UserDataScreenState extends State<UserDataScreen> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
+          hint: Text(
+            'Selecciona',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w400,
+              color: const Color(0xFF94A3B8),
+            ),
+          ),
           isExpanded: true,
           icon: const Icon(
             Icons.keyboard_arrow_down_rounded,

@@ -134,6 +134,23 @@ class ApiClient {
     }
   }
 
+  /// PUT /donantes/perfil — actualización parcial del perfil del usuario
+  /// móvil ("Datos del usuario"). Solo se tocan los campos que vienen en
+  /// el cuerpo; el correo no se manda desde la app (bloqueado en la UI).
+  /// La fecha acepta ISO ("1990-01-15") o "15 ene 1990". Devuelve el
+  /// perfil actualizado (+ token nuevo solo si cambia el correo, que la
+  /// app no permite). Requiere sesión móvil.
+  Future<Map<String, dynamic>> updateProfile(
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      final response = await dio.put(ApiConstants.updateProfile, data: data);
+      return _comoMapa(response.data);
+    } on DioException catch (e) {
+      throw _traducirError(e);
+    }
+  }
+
   /// La respuesta del backend es JSON (Map). Si viene otra cosa, es un
   /// error de contrato, no un login/registro válido.
   Map<String, dynamic> _comoMapa(dynamic data) {
