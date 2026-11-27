@@ -39,11 +39,22 @@ func parseInstID(r *http.Request) int {
 // logueado: su id, su rol y su institución. Se resuelve desde la BD por el
 // email del token (no por claims), para que los tokens ya emitidos sigan
 // funcionando.
+//
+// Dos tablas de identidad: la web (`usuarios`) y la app móvil
+// (`usuarios_moviles`, migración 000005). El JWT solo lleva email + rol,
+// así que la sesión se busca primero en `usuarios` (si el rol del token
+// coincide con el de esa fila) y si no, en `usuarios_moviles`.
+// EsMovil es true solo cuando la sesión salió de la tabla móvil: su id
+// es un id de `usuarios_moviles` (no de `usuarios`) y no tiene
+// institución. Los endpoints de la app exigen EsMovil; los de la web,
+// que no lo exigen, ven a un móvil como un usuario sin institución
+// (institucionParaConsulta devuelve -1: listas vacías).
 type sesionUsuario struct {
 	ID            int
 	RolID         int
 	InstitucionID *int
 	Email         string
+	EsMovil       bool
 }
 
 func sesionDesdeToken(r *http.Request) (sesionUsuario, bool) {
@@ -60,16 +71,31 @@ func sesionDesdeToken(r *http.Request) (sesionUsuario, bool) {
 	if err != nil || !token.Valid || c.Email == "" {
 		return s, false
 	}
+	// 1. Tabla web. El rol de la fila debe coincidir con el del token:
+	// si el mismo correo existe en las dos tablas (duplicado anterior
+	// a la regla de unicidad cruzada), el token manda y se sigue a la
+	// tabla móvil.
 	var instID sql.NullInt64
-	err = database.DB.QueryRow(`SELECT id, rol_id, institucion_id FROM usuarios WHERE email = $1`, c.Email).Scan(&s.ID, &s.RolID, &instID)
-	if err != nil {
-		return s, false
+	var rolFila int
+	err = database.DB.QueryRow(`SELECT id, rol_id, institucion_id FROM usuarios WHERE email = $1`, c.Email).Scan(&s.ID, &rolFila, &instID)
+	if err == nil && rolFila == c.RolID {
+		s.RolID = rolFila
+		if instID.Valid {
+			v := int(instID.Int64)
+			s.InstitucionID = &v
+		}
+		s.Email = c.Email
+		return s, true
 	}
-	if instID.Valid {
-		v := int(instID.Int64)
-		s.InstitucionID = &v
+	// 2. Tabla móvil.
+	var rolMovil int
+	err = database.DB.QueryRow(`SELECT id, COALESCE(rol_id, 0) FROM usuarios_moviles WHERE correo = $1`, c.Email).Scan(&s.ID, &rolMovil)
+	if err != nil || rolMovil != c.RolID {
+		return sesionUsuario{}, false
 	}
+	s.RolID = rolMovil
 	s.Email = c.Email
+	s.EsMovil = true
 	return s, true
 }
 

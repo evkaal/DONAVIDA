@@ -138,6 +138,44 @@ func main() {
 	// Notificaciones: GET lista del usuario, PATCH /{id}/leida marca leída
 	mux.HandleFunc("/api/notificaciones", handlers.GetNotificaciones)
 	mux.HandleFunc("/api/notificaciones/", handlers.MarcarNotificacionLeida)
+	// Marcar TODAS como leídas (la app móvil lo define así en ApiConstants).
+	mux.HandleFunc("/api/notificaciones/marcar-leidas", handlers.MarcarTodasLeidas)
+
+	// App móvil DONAVIDA (Flutter, rama feature/frontend-movil): su
+	// baseUrl ya incluye /api, así que la app llama a /api/auth/login,
+	// /api/auth/register, etc. /api/auth/login es el mismo Login de la
+	// web (busca primero en `usuarios` y si no, en `usuarios_moviles`;
+	// acepta "correo" además de "email" y devuelve el rol).
+	mux.HandleFunc("/api/auth/login", handlers.Login)
+	mux.HandleFunc("/api/auth/register", handlers.RegisterUsuarioMovil)
+	mux.HandleFunc("/api/auth/profile", handlers.GetPerfilMovil)
+	mux.HandleFunc("/api/auth/logout", handlers.LogoutMovil)
+
+	// Perfil del usuario móvil: GET lee, PUT actualiza ("Datos del usuario").
+	mux.HandleFunc("/api/donantes/perfil", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetPerfilMovil(w, r)
+		case http.MethodPut:
+			handlers.ActualizarPerfilMovil(w, r)
+		default:
+			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		}
+	})
+	// Aptitud para donar del usuario móvil (Apto / Faltan N días).
+	mux.HandleFunc("/api/donantes/aptitud", handlers.GetAptitudMovil)
+
+	// Donaciones del usuario móvil: GET historial, POST registra una donación.
+	mux.HandleFunc("/api/donaciones", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetDonaciones(w, r)
+		case http.MethodPost:
+			handlers.RegistrarDonacion(w, r)
+		default:
+			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		}
+	})
 
 	// Catálogos simples para formularios
 	mux.HandleFunc("/api/catalogos/tipos-institucion", handlers.GetTiposInstitucion)

@@ -40,6 +40,7 @@ type claims struct {
 type usuarioInput struct {
 	Nombre        string `json:"nombre"`
 	Email         string `json:"email"`
+	Correo        string `json:"correo"` // alias que usa la app móvil
 	Password      string `json:"password"`
 	RolID         int    `json:"rol_id"`
 	InstitucionId *int   `json:"institucion_id"`
@@ -129,6 +130,33 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "El personal médico no puede crear usuarios", http.StatusForbidden)
 		return
 	}
+	// Solo un administrador (rol 1 o 2) puede crear usuarios con sesión:
+	// los roles de la app móvil tampoco crean usuarios web.
+	if tieneCreador && creador.RolID != 1 && creador.RolID != 2 {
+		http.Error(w, "Solo un administrador puede crear usuarios", http.StatusForbidden)
+		return
+	}
+	// Los usuarios móviles NO se crean desde la web: nacen en la app
+	// (POST /api/auth/register), que es la que pide tipo de sangre y
+	// los guarda en `usuarios_moviles`. Si se crearan aquí quedarían en
+	// `usuarios` sin fila móvil y la app no podría leer su perfil.
+	if idMovil, errRol := resolveRolID(rolUsuarioMovil); errRol == nil && input.RolID == idMovil {
+		http.Error(w, "Los usuarios móviles se crean desde la app, no desde la web", http.StatusForbidden)
+		return
+	}
+	// Registro público (sin token): no se pueden crear administradores
+	// (ni admin general ni admin de la app móvil). La creación de admins
+	// queda solo para el admin general con sesión (ModalRegistrarUsuario).
+	if !tieneCreador {
+		if input.RolID == 1 {
+			http.Error(w, "El registro público no puede crear administradores", http.StatusForbidden)
+			return
+		}
+		if idAdminMovil, errRol := resolveRolID(rolAdminMovil); errRol == nil && input.RolID == idAdminMovil {
+			http.Error(w, "El registro público no puede crear administradores", http.StatusForbidden)
+			return
+		}
+	}
 	institucionID := input.InstitucionId
 	if tieneCreador {
 		if creador.RolID == 2 {
@@ -191,23 +219,46 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Buscar el usuario en la base de datos ÚNICAMENTE por su email
+	// La app móvil manda "correo"; la web manda "email". Se aceptan los dos.
+	if input.Email == "" {
+		input.Email = input.Correo
+	}
+
+	// 1. Buscar al usuario ÚNICAMENTE por su correo: primero en la
+	// tabla web (`usuarios`, incluye admin_movil) y si no está ahí, en
+	// la tabla móvil (`usuarios_moviles`). El JWT lleva el rol que se
+	// encontró, y la sesión se resuelve después en esa misma tabla.
 	var storedHash string
 	var nombreUsuario string
 	var rolID int
+	var rolNombre string
 	var activo bool
 	var institucionID sql.NullInt64
 	var institucionNombre sql.NullString
 
-	query := `SELECT u.nombre, u.password_hash, u.rol_id, u.estado, u.institucion_id, i.nombre
+	query := `SELECT u.nombre, u.password_hash, u.rol_id, COALESCE(r.nombre, ''), u.estado, u.institucion_id, i.nombre
 		FROM usuarios u
+		LEFT JOIN roles r ON r.id = u.rol_id
 		LEFT JOIN instituciones i ON u.institucion_id = i.id
 		WHERE u.email = $1`
-	err = database.DB.QueryRow(query, input.Email).Scan(&nombreUsuario, &storedHash, &rolID, &activo, &institucionID, &institucionNombre)
+	err = database.DB.QueryRow(query, input.Email).Scan(&nombreUsuario, &storedHash, &rolID, &rolNombre, &activo, &institucionID, &institucionNombre)
+	if err != nil {
+		// No es usuario web: probar la tabla móvil.
+		err = database.DB.QueryRow(`
+			SELECT um.nombre, um.password_hash, COALESCE(um.rol_id, 0), COALESCE(r.nombre, ''), um.estado
+			FROM usuarios_moviles um
+			LEFT JOIN roles r ON r.id = um.rol_id
+			WHERE um.correo = $1`, input.Email).Scan(&nombreUsuario, &storedHash, &rolID, &rolNombre, &activo)
+	}
 
 	if err != nil {
 		log.Printf("Error buscando usuario por email (%s): %v", input.Email, err)
 		http.Error(w, "Correo o contraseña incorrectos", http.StatusUnauthorized)
+		return
+	}
+	if rolID == 0 {
+		log.Printf("Login rechazado: usuario móvil sin rol asignado (%s)", input.Email)
+		http.Error(w, "Tu cuenta no tiene un rol asignado. Contacta a un administrador.", http.StatusUnauthorized)
 		return
 	}
 
@@ -269,7 +320,9 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		"token":          tokenString,
 		"nombre":         nombreUsuario,
 		"email":          input.Email,
+		"correo":         input.Email,
 		"rol_id":         rolID,
+		"rol":            rolNombre,
 		"institucion_id": institucionIDResp,
 		"institucion":    institucionResp,
 	})
@@ -839,8 +892,36 @@ func GetInstituciones(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Tu consulta a la base de datos aquí...
-	rows, err := database.DB.Query("SELECT id, nombre FROM instituciones ORDER BY nombre")
+	// Ubicación opcional del usuario móvil (?lat= &lon=): si viene, se
+	// calcula la distancia a cada institución (el mapa de la app la
+	// muestra y ordena por cercanía). Sin ubicación, distancia_km queda
+	// en 0 y el cálculo lo hace la app con el GPS del teléfono.
+	var latQ, lonQ float64
+	var conUbicacion bool
+	if latStr, lonStr := r.URL.Query().Get("lat"), r.URL.Query().Get("lon"); latStr != "" && lonStr != "" {
+		if lat, err1 := strconv.ParseFloat(latStr, 64); err1 == nil {
+			if lon, err2 := strconv.ParseFloat(lonStr, 64); err2 == nil {
+				latQ, lonQ, conUbicacion = lat, lon, true
+			}
+		}
+	}
+
+	// Respuesta completa para el mapa de la app (modelo InstitutionModel):
+	// dirección, colonia, CP, teléfono, horario, si está abierto, si es
+	// pública, coordenadas y sitio web. La web solo lee id y nombre, así
+	// que los campos extra no la afectan. Las columnas horario_apertura,
+	// horario_cierre, sitio_web y es_publica las agrega la migración
+	// 000006: sin ella, esta consulta falla.
+	rows, err := database.DB.Query(`
+		SELECT i.id, i.nombre, COALESCE(i.calle_numero, ''),
+		       c.nombre, c.codigo_postal, COALESCE(i.telefono, ''),
+		       i.horario_apertura, i.horario_cierre,
+		       COALESCE(i.es_publica, true),
+		       i.latitud, i.longitud, COALESCE(i.sitio_web, '')
+		FROM instituciones i
+		JOIN colonias c ON c.id = i.colonia_id
+		WHERE i.activo
+		ORDER BY i.nombre`)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -848,15 +929,86 @@ func GetInstituciones(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type Institucion struct {
-		ID     int    `json:"id"`
-		Nombre string `json:"nombre"`
+		ID                int     `json:"id"`
+		Nombre            string  `json:"nombre"`
+		Direccion         string  `json:"direccion"`
+		Colonia           string  `json:"colonia"`
+		CodigoPostal      string  `json:"codigo_postal"`
+		Telefono          string  `json:"telefono"`
+		Horario           string  `json:"horario"`
+		DistanciaKm       float64 `json:"distancia_km"`
+		TiempoMinutosAuto *int    `json:"tiempo_minutos_auto"`
+		EstaAbierto       bool    `json:"esta_abierto"`
+		EsPublica         bool    `json:"es_publica"`
+		EstadoHorario     string  `json:"estado_horario"`
+		Latitud           float64 `json:"latitud"`
+		Longitud          float64 `json:"longitud"`
+		SitioWeb          string  `json:"sitio_web"`
 	}
+
+	ahora := time.Now().In(zonaMexico())
+	minutosAhora := ahora.Hour()*60 + ahora.Minute()
 
 	lista := []Institucion{}
 	for rows.Next() {
 		var i Institucion
-		if err := rows.Scan(&i.ID, &i.Nombre); err != nil {
+		var calle, colonia, cp, telefono, sitioWeb string
+		var apertura, cierre sql.NullTime
+		var lat, lon sql.NullFloat64
+		if err := rows.Scan(&i.ID, &i.Nombre, &calle, &colonia, &cp, &telefono,
+			&apertura, &cierre, &i.EsPublica, &lat, &lon, &sitioWeb); err != nil {
 			continue
+		}
+		i.Colonia = colonia
+		i.CodigoPostal = cp
+		i.Telefono = telefono
+		i.SitioWeb = sitioWeb
+		if lat.Valid {
+			i.Latitud = lat.Float64
+		}
+		if lon.Valid {
+			i.Longitud = lon.Float64
+		}
+		// Dirección como la muestra la app: "Av. Independencia 120,
+		// Col. Centro, C.P. 68000".
+		partes := []string{}
+		if strings.TrimSpace(calle) != "" {
+			partes = append(partes, strings.TrimSpace(calle))
+		}
+		if strings.TrimSpace(colonia) != "" {
+			partes = append(partes, "Col. "+strings.TrimSpace(colonia))
+		}
+		if strings.TrimSpace(cp) != "" {
+			partes = append(partes, "C.P. "+strings.TrimSpace(cp))
+		}
+		i.Direccion = strings.Join(partes, ", ")
+		// Horario y si está abierto (hora de Oaxaca).
+		if apertura.Valid && cierre.Valid {
+			i.Horario = apertura.Time.Format("15:04") + " – " + cierre.Time.Format("15:04")
+			apMin := apertura.Time.Hour()*60 + apertura.Time.Minute()
+			ciMin := cierre.Time.Hour()*60 + cierre.Time.Minute()
+			i.EstaAbierto = minutosAhora >= apMin && minutosAhora < ciMin
+			if i.EstaAbierto {
+				i.EstadoHorario = "Hasta las " + cierre.Time.Format("15:04")
+			} else {
+				i.EstadoHorario = "Abre a las " + apertura.Time.Format("15:04")
+			}
+		} else {
+			i.Horario = "Sin horario registrado"
+			i.EstaAbierto = true
+			i.EstadoHorario = "Horario no registrado"
+		}
+		// Distancia y tiempo estimado en auto (30 km/h) si hay ubicación.
+		if conUbicacion && lat.Valid && lon.Valid {
+			d := distanciaKm(latQ, lonQ, lat.Float64, lon.Float64)
+			i.DistanciaKm = float64(int(d*10+0.5)) / 10
+			if i.DistanciaKm > 0 {
+				min := int(i.DistanciaKm*2 + 0.5)
+				if min < 1 {
+					min = 1
+				}
+				i.TiempoMinutosAuto = &min
+			}
 		}
 		lista = append(lista, i)
 	}
